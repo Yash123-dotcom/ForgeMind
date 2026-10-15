@@ -1,6 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/layout/AppShell';
 import { DiagnosticProgress } from '@/components/ui/DiagnosticProgress';
@@ -18,50 +23,124 @@ import {
   AlertCircle,
   Sparkles,
   Cpu,
+  CheckCircle2,
+  LoaderCircle,
 } from 'lucide-react';
 
-/* ─── Sample starter scenarios ───────────────────────────────────────────── */
+/* ============================================================
+   Configuration
+   ============================================================ */
+
+const MAX_FILES = 5;
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
+
+const ALLOWED_EXTENSIONS = [
+  '.cs',
+  '.json',
+  '.shader',
+  '.hlsl',
+  '.txt',
+  '.log',
+  '.asmdef',
+];
+
+const STAGES = [
+  'Validating parameters & uploaded evidence',
+  'Running deterministic Unity rules engine',
+  'Synthesizing diagnostic context with AI provider',
+  'Compiling evidence-backed report & verification steps',
+];
+
 const SAMPLE_CASES = [
   {
     name: 'CS0246: TMPro Missing',
-    title: 'CS0246 Unresolved namespace: TextMeshProUGUI in DamagePopup.cs',
+    title:
+      'CS0246 Unresolved namespace: TextMeshProUGUI in DamagePopup.cs',
     error: `Assets/Scripts/UI/DamagePopup.cs(14,13): error CS0246: The type or namespace name 'TextMeshProUGUI' could not be found (are you missing a using directive or an assembly reference?)
 Assets/Scripts/UI/DamagePopup.cs(22,9): error CS0103: The name 'damageText' does not exist in the current context`,
-    code: `using UnityEngine;\n\npublic class DamagePopup : MonoBehaviour\n{\n    [SerializeField] private TextMeshProUGUI damageText;\n\n    public void Setup(int damageAmount)\n    {\n        damageText.text = damageAmount.ToString();\n    }\n}`,
+    code: `using UnityEngine;
+
+public class DamagePopup : MonoBehaviour
+{
+    [SerializeField] private TextMeshProUGUI damageText;
+
+    public void Setup(int damageAmount)
+    {
+        damageText.text = damageAmount.ToString();
+    }
+}`,
     version: '2022.3 LTS' as UnityVersion,
     pipeline: 'urp' as UnityRenderPipeline,
-    platform: 'Standalone (Windows/Mac/Linux)' as TargetPlatform,
+    platform:
+      'Standalone (Windows/Mac/Linux)' as TargetPlatform,
     files: [] as UploadedFileContext[],
   },
   {
-    name: 'Pipeline: URP shader in Built-in',
-    title: 'Shader compile failure: UniversalForward in Built-in project',
+    name: 'Pipeline: URP in Built-in',
+    title:
+      'Shader compile failure: UniversalForward in Built-in project',
     error: `Shader error in 'Custom/WaterSurface': 'UniversalForward' pass undeclared or invalid LightMode for current pipeline at line 24 (on d3d11)
 WARNING: Shader is falling back to Hidden/InternalErrorShader (Rendering magenta).`,
-    code: `Shader "Custom/WaterSurface"\n{\n    SubShader\n    {\n        Tags { "RenderPipeline"="UniversalPipeline" }\n        Pass\n        {\n            Tags { "LightMode"="UniversalForward" }\n            HLSLPROGRAM\n            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"\n            ENDHLSL\n        }\n    }\n}`,
+    code: `Shader "Custom/WaterSurface"
+{
+    SubShader
+    {
+        Tags { "RenderPipeline"="UniversalPipeline" }
+        Pass
+        {
+            Tags { "LightMode"="UniversalForward" }
+            HLSLPROGRAM
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            ENDHLSL
+        }
+    }
+}`,
     version: '2022.3 LTS' as UnityVersion,
     pipeline: 'builtin' as UnityRenderPipeline,
-    platform: 'Standalone (Windows/Mac/Linux)' as TargetPlatform,
-    files: [],
+    platform:
+      'Standalone (Windows/Mac/Linux)' as TargetPlatform,
+    files: [] as UploadedFileContext[],
   },
   {
-    name: 'NullReferenceException in Start()',
-    title: 'NullReferenceException when accessing Camera reference in PlayerMovement.Start()',
-    error: `NullReferenceException: Object reference not set to an instance of an object\n  at PlayerMovement.Start () [0x00018] in Assets/Scripts/PlayerMovement.cs:28`,
-    code: `using UnityEngine;\n\npublic class PlayerMovement : MonoBehaviour\n{\n    [SerializeField] private Camera playerCamera;\n    private Vector3 cameraOffset;\n\n    void Start()\n    {\n        cameraOffset = transform.position - playerCamera.transform.position;\n    }\n}`,
+    name: 'NullReferenceException',
+    title:
+      'NullReferenceException when accessing Camera reference in PlayerMovement.Start()',
+    error: `NullReferenceException: Object reference not set to an instance of an object
+  at PlayerMovement.Start () [0x00018] in Assets/Scripts/PlayerMovement.cs:28`,
+    code: `using UnityEngine;
+
+public class PlayerMovement : MonoBehaviour
+{
+    [SerializeField] private Camera playerCamera;
+    private Vector3 cameraOffset;
+
+    void Start()
+    {
+        cameraOffset = transform.position - playerCamera.transform.position;
+    }
+}`,
     version: '6000.0 (Unity 6)' as UnityVersion,
     pipeline: 'urp' as UnityRenderPipeline,
-    platform: 'Standalone (Windows/Mac/Linux)' as TargetPlatform,
-    files: [],
+    platform:
+      'Standalone (Windows/Mac/Linux)' as TargetPlatform,
+    files: [] as UploadedFileContext[],
   },
   {
-    name: 'Manifest: Missing InputSystem',
-    title: 'CS0246 UnityEngine.InputSystem missing from Packages/manifest.json',
-    error: `Assets/Scripts/PlayerController.cs(6,7): error CS0246: The type or namespace name 'UnityEngine' could not be found — are you missing 'using UnityEngine.InputSystem;'?`,
-    code: `using UnityEngine;\nusing UnityEngine.InputSystem;\n\npublic class PlayerController : MonoBehaviour\n{\n    public InputActionReference moveAction;\n}`,
+    name: 'Manifest: Input System',
+    title:
+      'CS0246 UnityEngine.InputSystem missing from Packages/manifest.json',
+    error: `Assets/Scripts/PlayerController.cs(6,7): error CS0246: The type or namespace name 'UnityEngine' could not be found — check the relevant assembly references and package dependencies.`,
+    code: `using UnityEngine;
+using UnityEngine.InputSystem;
+
+public class PlayerController : MonoBehaviour
+{
+    public InputActionReference moveAction;
+}`,
     version: '2023.3 LTS' as UnityVersion,
     pipeline: 'urp' as UnityRenderPipeline,
-    platform: 'Standalone (Windows/Mac/Linux)' as TargetPlatform,
+    platform:
+      'Standalone (Windows/Mac/Linux)' as TargetPlatform,
     files: [
       {
         name: 'manifest.json',
@@ -79,25 +158,51 @@ WARNING: Shader is falling back to Hidden/InternalErrorShader (Rendering magenta
           2
         ),
       },
-    ],
+    ] as UploadedFileContext[],
   },
 ];
 
-const STAGES = [
-  'Validating parameters & uploaded evidence',
-  'Running deterministic Unity rules engine',
-  'Synthesizing diagnostic context with AI provider',
-  'Compiling evidence-backed report & verification steps',
-];
+/* ============================================================
+   File Reader
+   ============================================================ */
 
-/* ─── Field wrapper ──────────────────────────────────────────────────────── */
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+      } else {
+        reject(new Error(`Could not read "${file.name}" as text.`));
+      }
+    };
+
+    reader.onerror = () => {
+      reject(new Error(`Failed to read "${file.name}".`));
+    };
+
+    reader.onabort = () => {
+      reject(new Error(`Reading "${file.name}" was cancelled.`));
+    };
+
+    reader.readAsText(file);
+  });
+}
+
+/* ============================================================
+   Form Field
+   ============================================================ */
+
 function Field({
+  id,
   label,
   required,
   hint,
   children,
   charCount,
 }: {
+  id?: string;
   label: string;
   required?: boolean;
   hint?: string;
@@ -105,116 +210,321 @@ function Field({
   charCount?: number;
 }) {
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <label className="text-[11px] font-mono uppercase tracking-widest text-foreground-secondary">
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label
+          htmlFor={id}
+          className="text-[11px] font-mono font-medium uppercase tracking-[0.12em] text-foreground-secondary"
+        >
           {label}
-          {required && <span className="text-brand ml-1">*</span>}
+          {required && (
+            <span className="ml-1 text-brand" aria-hidden="true">
+              *
+            </span>
+          )}
         </label>
+
         <div className="flex items-center gap-3 text-[11px] font-mono text-foreground-muted">
           {hint && <span>{hint}</span>}
-          {charCount !== undefined && <span>{charCount.toLocaleString()} chars</span>}
+
+          {charCount !== undefined && (
+            <span className="tabular-nums">
+              {charCount.toLocaleString()} chars
+            </span>
+          )}
         </div>
       </div>
+
       {children}
     </div>
   );
 }
 
-/* ─── Page ───────────────────────────────────────────────────────────────── */
+/* ============================================================
+   New Investigation Page
+   ============================================================ */
+
 export default function NewInvestigationPage() {
   const router = useRouter();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachedFilesRef = useRef<UploadedFileContext[]>([]);
+  const pendingFileReads = useRef(0);
+  const submittingRef = useRef(false);
+  const progressIntervalRef =
+    useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [title, setTitle] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [codeSnippet, setCodeSnippet] = useState('');
   const [projectContext, setProjectContext] = useState('');
-  const [unityVersion, setUnityVersion] = useState<UnityVersion>('2022.3 LTS');
-  const [renderPipeline, setRenderPipeline] = useState<UnityRenderPipeline>('urp');
-  const [targetPlatform, setTargetPlatform] = useState<TargetPlatform>('Standalone (Windows/Mac/Linux)');
-  const [attachedFiles, setAttachedFiles] = useState<UploadedFileContext[]>([]);
+
+  const [unityVersion, setUnityVersion] =
+    useState<UnityVersion>('2022.3 LTS');
+
+  const [renderPipeline, setRenderPipeline] =
+    useState<UnityRenderPipeline>('urp');
+
+  const [targetPlatform, setTargetPlatform] =
+    useState<TargetPlatform>(
+      'Standalone (Windows/Mac/Linux)'
+    );
+
+  const [attachedFiles, setAttachedFiles] =
+    useState<UploadedFileContext[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStage, setCurrentStage] = useState(0);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError] =
+    useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const applySample = (s: (typeof SAMPLE_CASES)[0]) => {
-    setTitle(s.title);
-    setErrorMessage(s.error);
-    setCodeSnippet(s.code);
-    setUnityVersion(s.version);
-    setRenderPipeline(s.pipeline);
-    setTargetPlatform(s.platform);
-    setAttachedFiles(s.files);
+  /* Keep the state and ref in sync so rapid file selections
+     cannot exceed the attachment limit. */
+  const updateAttachedFiles = useCallback(
+    (
+      next:
+        | UploadedFileContext[]
+        | ((
+            previous: UploadedFileContext[]
+          ) => UploadedFileContext[])
+    ) => {
+      const resolved =
+        typeof next === 'function'
+          ? next(attachedFilesRef.current)
+          : next;
+
+      attachedFilesRef.current = resolved;
+      setAttachedFiles(resolved);
+    },
+    []
+  );
+
+  const clearProgressInterval = useCallback(() => {
+    if (progressIntervalRef.current !== null) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearProgressInterval();
+    };
+  }, [clearProgressInterval]);
+
+  /* ============================================================
+     Sample Scenarios
+     ============================================================ */
+
+  const applySample = (
+    sample: (typeof SAMPLE_CASES)[number]
+  ) => {
+    if (isSubmitting) return;
+
+    setTitle(sample.title);
+    setErrorMessage(sample.error);
+    setCodeSnippet(sample.code);
+    setProjectContext('');
+    setUnityVersion(sample.version);
+    setRenderPipeline(sample.pipeline);
+    setTargetPlatform(sample.platform);
+
+    updateAttachedFiles(sample.files);
+
     setValidationError(null);
   };
 
-  const processFiles = (fileList: FileList) => {
-    const allowed = ['.cs', '.json', '.shader', '.hlsl', '.txt', '.log', '.asmdef'];
-    const maxSize = 2 * 1024 * 1024;
+  /* ============================================================
+     File Uploads
+     ============================================================ */
 
-    for (let i = 0; i < fileList.length; i++) {
-      if (attachedFiles.length >= 5) {
-        setValidationError('Maximum 5 files per investigation.');
-        return;
-      }
-      const file = fileList[i];
-      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-      if (!allowed.includes(ext)) {
-        setValidationError(`Unsupported extension ${ext}. Allowed: ${allowed.join(', ')}`);
+  const processFiles = async (fileList: FileList | File[]) => {
+    if (isSubmitting) return;
+
+    setValidationError(null);
+
+    const files = Array.from(fileList);
+
+    for (const file of files) {
+      const extensionIndex = file.name.lastIndexOf('.');
+      const extension =
+        extensionIndex >= 0
+          ? file.name.slice(extensionIndex).toLowerCase()
+          : '';
+
+      if (!ALLOWED_EXTENSIONS.includes(extension)) {
+        setValidationError(
+          `Unsupported file type "${extension || 'none'}". Allowed: ${ALLOWED_EXTENSIONS.join(', ')}.`
+        );
         continue;
       }
-      if (file.size > maxSize) {
-        setValidationError(`"${file.name}" exceeds the 2 MB limit.`);
+
+      if (file.size > MAX_FILE_SIZE) {
+        setValidationError(
+          `"${file.name}" exceeds the 2 MB file-size limit.`
+        );
         continue;
       }
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setAttachedFiles((prev) => [
-          ...prev,
-          { name: file.name, size: file.size, type: file.type || 'text/plain', content: e.target?.result as string },
+
+      const alreadyAttached = attachedFilesRef.current.some(
+        (attached) => attached.name === file.name
+      );
+
+      if (alreadyAttached) {
+        setValidationError(
+          `"${file.name}" is already attached.`
+        );
+        continue;
+      }
+
+      if (
+        attachedFilesRef.current.length + pendingFileReads.current >=
+        MAX_FILES
+      ) {
+        setValidationError(
+          `You can attach a maximum of ${MAX_FILES} files per investigation.`
+        );
+        break;
+      }
+
+      pendingFileReads.current += 1;
+
+      try {
+        const content = await readFileAsText(file);
+
+        const duplicateAfterRead =
+          attachedFilesRef.current.some(
+            (attached) => attached.name === file.name
+          );
+
+        if (duplicateAfterRead) {
+          setValidationError(
+            `"${file.name}" is already attached.`
+          );
+          continue;
+        }
+
+        if (attachedFilesRef.current.length >= MAX_FILES) {
+          setValidationError(
+            `You can attach a maximum of ${MAX_FILES} files per investigation.`
+          );
+          break;
+        }
+
+        const uploadedFile: UploadedFileContext = {
+          name: file.name,
+          size: file.size,
+          type: file.type || 'text/plain',
+          content,
+        };
+
+        updateAttachedFiles((previous) => [
+          ...previous,
+          uploadedFile,
         ]);
-      };
-      reader.readAsText(file);
+      } catch (err) {
+        setValidationError(
+          err instanceof Error
+            ? err.message
+            : `Could not read "${file.name}".`
+        );
+      } finally {
+        pendingFileReads.current = Math.max(
+          0,
+          pendingFileReads.current - 1
+        );
+      }
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) processFiles(e.target.files);
-    e.target.value = '';
+  const handleFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const input = event.currentTarget;
+    const files = input.files;
+
+    if (files?.length) {
+      void processFiles(files);
+    }
+
+    // Allow the user to select the same file again after removal.
+    input.value = '';
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDrop = (
+    event: React.DragEvent<HTMLDivElement>
+  ) => {
+    event.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer.files) processFiles(e.dataTransfer.files);
+
+    if (event.dataTransfer.files.length) {
+      void processFiles(event.dataTransfer.files);
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const removeFile = (name: string) => {
+    updateAttachedFiles((previous) =>
+      previous.filter((file) => file.name !== name)
+    );
+
+    setValidationError(null);
+  };
+
+  /* ============================================================
+     Submission
+     ============================================================ */
+
+  const handleSubmit = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    if (submittingRef.current) return;
+
     setValidationError(null);
 
     if (title.trim().length < 3) {
-      setValidationError('Title must be at least 3 characters.');
-      return;
-    }
-    if (errorMessage.trim().length < 5) {
-      setValidationError('Please paste the Unity console error or stack trace.');
+      setValidationError(
+        'Enter an investigation title with at least 3 characters.'
+      );
       return;
     }
 
+    if (errorMessage.trim().length < 5) {
+      setValidationError(
+        'Paste the Unity Console error or stack trace before continuing.'
+      );
+      return;
+    }
+
+    if (pendingFileReads.current > 0) {
+      setValidationError(
+        'Please wait for attached files to finish reading before submitting.'
+      );
+      return;
+    }
+
+    submittingRef.current = true;
     setIsSubmitting(true);
     setCurrentStage(0);
 
-    const interval = setInterval(() => {
-      setCurrentStage((p) => (p < STAGES.length - 1 ? p + 1 : p));
-    }, 1400);
+    clearProgressInterval();
+
+    progressIntervalRef.current = setInterval(() => {
+      setCurrentStage((previous) =>
+        previous < STAGES.length - 1
+          ? previous + 1
+          : previous
+      );
+    }, 1600);
 
     try {
-      const res = await fetch('/api/investigations', {
+      const response = await fetch('/api/investigations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           title: title.trim(),
           errorMessage: errorMessage.trim(),
@@ -223,236 +533,560 @@ export default function NewInvestigationPage() {
           unityVersion,
           renderPipeline,
           targetPlatform,
-          attachedFiles,
+          attachedFiles: attachedFilesRef.current,
         }),
       });
-      clearInterval(interval);
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Investigation failed');
-      router.push(`/investigations/${data.data.id}`);
-    } catch (err: any) {
-      clearInterval(interval);
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok || !data?.success) {
+        throw new Error(
+          typeof data?.error === 'string'
+            ? data.error
+            : `Investigation failed (${response.status}). Please try again.`
+        );
+      }
+
+      const investigationId = data?.data?.id;
+
+      if (
+        typeof investigationId !== 'string' ||
+        investigationId.length === 0
+      ) {
+        throw new Error(
+          'The server response did not include an investigation ID.'
+        );
+      }
+
+      setCurrentStage(STAGES.length - 1);
+
+      router.push(
+        `/investigations/${encodeURIComponent(investigationId)}`
+      );
+    } catch (err) {
+      setValidationError(
+        err instanceof Error
+          ? err.message
+          : 'Diagnostic failed. Check your inputs and try again.'
+      );
+    } finally {
+      clearProgressInterval();
+      submittingRef.current = false;
       setIsSubmitting(false);
-      setValidationError(err.message || 'Diagnostic failed. Check your inputs and try again.');
     }
   };
 
-  /* Select class helper */
-  const selectClass =
-    'fm-input w-full px-3 py-2 rounded-md border border-border bg-surface text-xs font-mono text-foreground cursor-pointer';
+  /* ============================================================
+     Shared Styles
+     ============================================================ */
 
-  /* Textarea class helper */
+  const selectClass =
+    'fm-input w-full cursor-pointer rounded-md border border-border bg-surface px-3 py-2.5 text-xs font-mono text-foreground transition-colors';
+
   const textareaClass =
-    'fm-input w-full p-3 rounded-md border border-border bg-surface font-mono text-xs text-foreground placeholder:text-foreground-muted leading-relaxed resize-y min-h-[100px]';
+    'fm-input w-full min-h-[120px] resize-y rounded-md border border-border bg-surface p-3 font-mono text-xs leading-relaxed text-foreground placeholder:text-foreground-muted transition-colors';
+
+  const inputClass =
+    'fm-input w-full rounded-md border border-border bg-surface px-3.5 py-2.5 text-sm text-foreground placeholder:text-foreground-muted transition-colors';
+
+  /* ============================================================
+     Render
+     ============================================================ */
 
   return (
     <AppShell>
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="fm-page-enter mx-auto max-w-3xl space-y-6">
         {/* Header */}
-        <div className="pb-4 border-b border-border animate-enter">
-          <div className="flex items-center gap-2 text-[11px] font-mono text-brand mb-1">
-            <Cpu className="w-3.5 h-3.5" />
-            <span>DIAGNOSTIC WORKBENCH</span>
+        <header className="space-y-2 border-b border-border pb-5">
+          <div className="mb-1 flex items-center gap-2 text-[10px] font-mono font-medium uppercase tracking-[0.15em] text-brand">
+            <Cpu className="h-3.5 w-3.5" />
+            <span>Diagnostic Workbench</span>
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">
+
+          <h1 className="text-xl font-bold tracking-[-0.025em] text-foreground sm:text-2xl">
             New Unity Project Investigation
           </h1>
-          <p className="text-xs text-foreground-secondary mt-0.5">
-            Submit a console error or stack trace with project context to generate an evidence-backed diagnostic report.
-          </p>
-        </div>
 
-        {/* Starter scenarios */}
-        <div className="p-3.5 rounded-lg border border-border bg-surface animate-enter delay-100">
-          <div className="flex items-center gap-1.5 text-xs text-foreground-secondary mb-2.5">
-            <Sparkles className="w-3.5 h-3.5 text-brand" />
-            <span className="font-mono">Load a sample scenario:</span>
+          <p className="max-w-2xl text-xs leading-relaxed text-foreground-secondary sm:text-sm">
+            Submit a console error or stack trace with project
+            context to generate an evidence-backed diagnostic report.
+          </p>
+        </header>
+
+        {/* Starter Scenarios */}
+        <section className="fm-card animate-enter space-y-3 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md border border-brand/20 bg-brand/5">
+              <Sparkles className="h-3.5 w-3.5 text-brand" />
+            </div>
+
+            <div>
+              <h2 className="text-xs font-semibold text-foreground">
+                Start with an example
+              </h2>
+              <p className="text-[11px] text-foreground-muted">
+                Populate the form with a sample Unity issue.
+              </p>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {SAMPLE_CASES.map((s, i) => (
+
+          <div className="flex flex-wrap gap-2">
+            {SAMPLE_CASES.map((sample) => (
               <button
-                key={i}
+                key={sample.name}
                 type="button"
-                onClick={() => applySample(s)}
-                className="px-2.5 py-1 text-[11px] font-mono rounded border border-border bg-surface-elevated hover:bg-surface-hover hover:border-brand/40 hover:text-brand text-foreground-secondary transition-all duration-150"
+                onClick={() => applySample(sample)}
+                disabled={isSubmitting}
+                className="rounded-md border border-border bg-surface-elevated px-2.5 py-1.5 text-[11px] font-mono text-foreground-secondary transition-all duration-200 hover:border-brand/40 hover:bg-brand/5 hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {s.name}
+                {sample.name}
               </button>
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* Validation error */}
+        {/* Validation Error */}
         {validationError && (
-          <div className="flex items-center gap-2.5 p-3 rounded-md border border-[rgba(239,119,112,0.3)] bg-[rgba(239,119,112,0.08)] text-[#ef7770] text-xs animate-scale-in">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{validationError}</span>
+          <div
+            role="alert"
+            aria-live="polite"
+            className="animate-scale-in flex items-start gap-2.5 rounded-md border border-[rgba(239,119,112,0.3)] bg-[rgba(239,119,112,0.06)] p-3.5 text-xs text-[#ef7770]"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+
+            <p className="flex-1 leading-relaxed">
+              {validationError}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setValidationError(null)}
+              aria-label="Dismiss error"
+              className="rounded p-0.5 transition-colors hover:bg-white/5"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
 
-        {/* ── Loading State ────────────────────────────────────────────────── */}
+        {/* Submission Progress */}
         {isSubmitting ? (
-          <div className="py-12 px-6 rounded-lg border border-border bg-surface text-center space-y-8 animate-scale-in">
-            <div>
-              <h3 className="text-base font-semibold text-foreground mb-1">
+          <section
+            aria-live="polite"
+            aria-busy="true"
+            className="fm-card animate-scale-in space-y-8 rounded-lg px-5 py-12 text-center sm:px-8"
+          >
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-brand/20 bg-brand/5">
+              <LoaderCircle className="h-6 w-6 animate-spin text-brand" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-base font-semibold tracking-tight text-foreground">
                 Analyzing Investigation
-              </h3>
-              <p className="text-xs text-foreground-secondary">
-                ForgeMind is processing your Unity error and project context.
+              </h2>
+
+              <p className="mx-auto max-w-md text-xs leading-relaxed text-foreground-secondary">
+                ForgeMind is processing your Unity error and
+                project context. The analysis may take a moment.
               </p>
             </div>
-            <DiagnosticProgress stages={STAGES} currentStage={currentStage} />
+
+            <DiagnosticProgress
+              stages={STAGES}
+              currentStage={currentStage}
+            />
+
             <p className="text-[11px] font-mono text-foreground-muted">
-              Do not close this tab — results will appear momentarily.
+              Keep this tab open while your report is being generated.
             </p>
-          </div>
+          </section>
         ) : (
-          /* ── Form ─────────────────────────────────────────────────────── */
-          <form onSubmit={handleSubmit} className="space-y-5 animate-enter delay-150">
-            {/* Title */}
-            <Field label="Investigation Title" required>
-              <input
-                type="text"
-                required
-                placeholder="e.g. CS0246 Unresolved namespace in PlayerController"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="fm-input w-full px-3.5 py-2.5 rounded-md border border-border bg-surface text-sm text-foreground placeholder:text-foreground-muted"
-              />
-            </Field>
-
-            {/* Error Log */}
-            <Field label="Unity Console Error / Stack Trace" required charCount={errorMessage.length}>
-              <textarea
-                required
-                rows={6}
-                placeholder="Paste Unity Console output, compiler errors, or runtime stack trace…"
-                value={errorMessage}
-                onChange={(e) => setErrorMessage(e.target.value)}
-                className={textareaClass}
-              />
-            </Field>
-
-            {/* Environment Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Field label="Unity Version" required>
-                <select value={unityVersion} onChange={(e) => setUnityVersion(e.target.value as UnityVersion)} className={selectClass}>
-                  <option value="6000.0 (Unity 6)">6000.0 (Unity 6)</option>
-                  <option value="2023.3 LTS">2023.3 LTS</option>
-                  <option value="2022.3 LTS">2022.3 LTS</option>
-                  <option value="2021.3 LTS">2021.3 LTS</option>
-                  <option value="2020.3 LTS">2020.3 LTS</option>
-                  <option value="Other">Other</option>
-                </select>
-              </Field>
-              <Field label="Render Pipeline" required>
-                <select value={renderPipeline} onChange={(e) => setRenderPipeline(e.target.value as UnityRenderPipeline)} className={selectClass}>
-                  <option value="urp">Universal Render Pipeline (URP)</option>
-                  <option value="builtin">Built-in Render Pipeline</option>
-                  <option value="hdrp">High Definition RP (HDRP)</option>
-                  <option value="unknown">Unknown / Default</option>
-                </select>
-              </Field>
-              <Field label="Target Platform">
-                <select value={targetPlatform} onChange={(e) => setTargetPlatform(e.target.value as TargetPlatform)} className={selectClass}>
-                  <option value="Standalone (Windows/Mac/Linux)">Standalone</option>
-                  <option value="iOS">iOS</option>
-                  <option value="Android">Android</option>
-                  <option value="WebGL">WebGL</option>
-                  <option value="Console">Console</option>
-                  <option value="Universal / Any">Universal / Any</option>
-                </select>
-              </Field>
-            </div>
-
-            {/* Code Snippet */}
-            <Field label="Relevant C# Code Snippet" hint="Optional" charCount={codeSnippet.length}>
-              <textarea
-                rows={5}
-                placeholder="// Paste the relevant script section or method…"
-                value={codeSnippet}
-                onChange={(e) => setCodeSnippet(e.target.value)}
-                className={textareaClass}
-              />
-            </Field>
-
-            {/* Context */}
-            <Field label="Project & Reproduction Context" hint="Optional">
-              <input
-                type="text"
-                placeholder="e.g. Occurs when switching scenes after upgrading from 2021 LTS"
-                value={projectContext}
-                onChange={(e) => setProjectContext(e.target.value)}
-                className="fm-input w-full px-3.5 py-2.5 rounded-md border border-border bg-surface text-sm text-foreground placeholder:text-foreground-muted"
-              />
-            </Field>
-
-            {/* File Upload */}
-            <Field label="Attach Evidence Files" hint="Max 5 files · 2 MB each · .cs .json .shader .hlsl .txt .log .asmdef">
-              <div
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                className={`relative border rounded-lg p-5 text-center transition-all duration-150 ${
-                  dragOver
-                    ? 'border-brand bg-brand/5'
-                    : 'border-dashed border-border bg-surface/50 hover:bg-surface'
-                }`}
-              >
-                <input
-                  type="file"
-                  multiple
-                  accept=".cs,.json,.shader,.hlsl,.txt,.log,.asmdef"
-                  onChange={handleFileChange}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                />
-                <div className="pointer-events-none flex flex-col items-center gap-1.5">
-                  <UploadCloud className={`w-5 h-5 transition-colors duration-150 ${dragOver ? 'text-brand' : 'text-foreground-muted'}`} />
-                  <span className="text-xs font-medium text-foreground">
-                    {dragOver ? 'Drop files here' : 'Click or drag & drop files'}
-                  </span>
-                  <span className="text-[11px] text-foreground-muted">
-                    Processed in-memory · Never executed on server
-                  </span>
-                </div>
+          /* Investigation Form */
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-6"
+          >
+            {/* Required Evidence */}
+            <section className="fm-card animate-enter space-y-5 rounded-lg p-4 sm:p-5">
+              <div className="space-y-1">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Investigation Details
+                </h2>
+                <p className="text-xs leading-relaxed text-foreground-secondary">
+                  Start with the issue you are experiencing in Unity.
+                </p>
               </div>
 
-              {/* Attached files */}
-              {attachedFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {attachedFiles.map((file, i) => (
-                    <div
-                      key={i}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-border bg-surface-elevated text-[11px] font-mono text-foreground animate-scale-in"
+              <Field
+                id="investigation-title"
+                label="Investigation Title"
+                required
+              >
+                <input
+                  id="investigation-title"
+                  type="text"
+                  required
+                  minLength={3}
+                  maxLength={200}
+                  autoComplete="off"
+                  placeholder="e.g. CS0246 unresolved namespace in PlayerController"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  disabled={isSubmitting}
+                  className={inputClass}
+                />
+              </Field>
+
+              <Field
+                id="unity-error"
+                label="Unity Console Error / Stack Trace"
+                required
+                charCount={errorMessage.length}
+              >
+                <textarea
+                  id="unity-error"
+                  required
+                  minLength={5}
+                  rows={7}
+                  placeholder={`Paste Unity Console output, compiler errors, or a runtime stack trace...\n\nExample:\nNullReferenceException: Object reference not set to an instance of an object`}
+                  value={errorMessage}
+                  onChange={(event) =>
+                    setErrorMessage(event.target.value)
+                  }
+                  disabled={isSubmitting}
+                  className={textareaClass}
+                />
+
+                <p className="text-[11px] leading-relaxed text-foreground-muted">
+                  Include the full error message and stack trace when
+                  available. Remove passwords, API keys, and other secrets.
+                </p>
+              </Field>
+            </section>
+
+            {/* Environment */}
+            <section
+              className="fm-card animate-enter space-y-5 rounded-lg p-4 sm:p-5"
+              style={{ animationDelay: '60ms' }}
+            >
+              <div className="space-y-1">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Project Environment
+                </h2>
+                <p className="text-xs leading-relaxed text-foreground-secondary">
+                  Provide the environment details needed to interpret
+                  compatibility issues.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field
+                  id="unity-version"
+                  label="Unity Version"
+                  required
+                >
+                  <select
+                    id="unity-version"
+                    required
+                    value={unityVersion}
+                    onChange={(event) =>
+                      setUnityVersion(
+                        event.target.value as UnityVersion
+                      )
+                    }
+                    disabled={isSubmitting}
+                    className={selectClass}
+                  >
+                    <option value="6000.0 (Unity 6)">
+                      6000.0 (Unity 6)
+                    </option>
+                    <option value="2023.3 LTS">2023.3 LTS</option>
+                    <option value="2022.3 LTS">2022.3 LTS</option>
+                    <option value="2021.3 LTS">2021.3 LTS</option>
+                    <option value="2020.3 LTS">2020.3 LTS</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </Field>
+
+                <Field
+                  id="render-pipeline"
+                  label="Render Pipeline"
+                  required
+                >
+                  <select
+                    id="render-pipeline"
+                    required
+                    value={renderPipeline}
+                    onChange={(event) =>
+                      setRenderPipeline(
+                        event.target.value as UnityRenderPipeline
+                      )
+                    }
+                    disabled={isSubmitting}
+                    className={selectClass}
+                  >
+                    <option value="urp">
+                      Universal Render Pipeline
+                    </option>
+                    <option value="builtin">
+                      Built-in Render Pipeline
+                    </option>
+                    <option value="hdrp">
+                      High Definition RP
+                    </option>
+                    <option value="unknown">
+                      Unknown / Default
+                    </option>
+                  </select>
+                </Field>
+
+                <div className="sm:col-span-2">
+                  <Field
+                    id="target-platform"
+                    label="Target Platform"
+                    hint="Optional"
+                  >
+                    <select
+                      id="target-platform"
+                      value={targetPlatform}
+                      onChange={(event) =>
+                        setTargetPlatform(
+                          event.target.value as TargetPlatform
+                        )
+                      }
+                      disabled={isSubmitting}
+                      className={selectClass}
                     >
-                      <FileCode className="w-3 h-3 text-brand shrink-0" />
-                      <span className="truncate max-w-[180px]">{file.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => setAttachedFiles((p) => p.filter((_, idx) => idx !== i))}
-                        className="text-foreground-muted hover:text-[#ef7770] transition-colors"
+                      <option value="Standalone (Windows/Mac/Linux)">
+                        Standalone (Windows / Mac / Linux)
+                      </option>
+                      <option value="iOS">iOS</option>
+                      <option value="Android">Android</option>
+                      <option value="WebGL">WebGL</option>
+                      <option value="Console">Console</option>
+                      <option value="Universal / Any">
+                        Universal / Any
+                      </option>
+                    </select>
+                  </Field>
+                </div>
+              </div>
+            </section>
+
+            {/* Additional Context */}
+            <section
+              className="fm-card animate-enter space-y-5 rounded-lg p-4 sm:p-5"
+              style={{ animationDelay: '100ms' }}
+            >
+              <div className="space-y-1">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Additional Context
+                </h2>
+                <p className="text-xs leading-relaxed text-foreground-secondary">
+                  Optional details can help narrow down the likely root cause.
+                </p>
+              </div>
+
+              <Field
+                id="code-snippet"
+                label="Relevant C# Code"
+                hint="Optional"
+                charCount={codeSnippet.length}
+              >
+                <textarea
+                  id="code-snippet"
+                  rows={6}
+                  placeholder={`// Paste the relevant script or method...\npublic void Start()\n{\n    // Relevant code\n}`}
+                  value={codeSnippet}
+                  onChange={(event) =>
+                    setCodeSnippet(event.target.value)
+                  }
+                  disabled={isSubmitting}
+                  className={textareaClass}
+                />
+              </Field>
+
+              <Field
+                id="project-context"
+                label="Project & Reproduction Context"
+                hint="Optional"
+              >
+                <textarea
+                  id="project-context"
+                  rows={3}
+                  placeholder="e.g. The issue started after upgrading Unity or switching render pipelines..."
+                  value={projectContext}
+                  onChange={(event) =>
+                    setProjectContext(event.target.value)
+                  }
+                  disabled={isSubmitting}
+                  className={`${inputClass} min-h-[90px] resize-y`}
+                />
+              </Field>
+            </section>
+
+            {/* File Attachments */}
+            <section
+              className="fm-card animate-enter space-y-4 rounded-lg p-4 sm:p-5"
+              style={{ animationDelay: '140ms' }}
+            >
+              <div className="space-y-1">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Evidence Files
+                </h2>
+                <p className="text-xs leading-relaxed text-foreground-secondary">
+                  Attach scripts, manifests, or shader files relevant to
+                  your investigation.
+                </p>
+              </div>
+
+              <div
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  if (!isSubmitting) setDragOver(true);
+                }}
+                onDragLeave={(event) => {
+                  event.preventDefault();
+                  setDragOver(false);
+                }}
+                onDrop={handleDrop}
+                className={`rounded-lg border border-dashed p-6 text-center transition-all duration-200 sm:p-8 ${
+                  dragOver
+                    ? 'border-brand bg-brand/5'
+                    : 'border-border bg-surface/50 hover:border-border-active hover:bg-surface'
+                } ${isSubmitting ? 'pointer-events-none opacity-50' : ''}`}
+              >
+                <div className="pointer-events-none flex flex-col items-center gap-2">
+                  <div
+                    className={`flex h-11 w-11 items-center justify-center rounded-xl border transition-colors ${
+                      dragOver
+                        ? 'border-brand/30 bg-brand/10 text-brand'
+                        : 'border-border bg-surface text-foreground-muted'
+                    }`}
+                  >
+                    <UploadCloud className="h-5 w-5" />
+                  </div>
+
+                  <p className="text-xs font-medium text-foreground">
+                    {dragOver
+                      ? 'Drop files to attach them'
+                      : 'Drag and drop your files here'}
+                  </p>
+
+                  <p className="text-[11px] text-foreground-muted">
+                    or select files from your computer
+                  </p>
+                </div>
+
+                <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-surface-elevated px-3.5 py-2 text-xs font-medium text-foreground transition-colors hover:border-brand/40 hover:text-brand">
+                  <FileCode className="h-3.5 w-3.5" />
+                  Browse Files
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".cs,.json,.shader,.hlsl,.txt,.log,.asmdef"
+                    onChange={handleFileChange}
+                    disabled={isSubmitting}
+                    className="sr-only"
+                  />
+                </label>
+
+                <p className="mt-4 text-[10px] font-mono leading-relaxed text-foreground-muted">
+                  {MAX_FILES} files max · 2 MB each ·{' '}
+                  {ALLOWED_EXTENSIONS.join(', ')}
+                </p>
+              </div>
+
+              {/* Attachment list */}
+              {attachedFiles.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-foreground-muted">
+                      Attached Files
+                    </p>
+                    <span className="text-[10px] font-mono text-foreground-muted">
+                      {attachedFiles.length}/{MAX_FILES}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {attachedFiles.map((file) => (
+                      <div
+                        key={file.name}
+                        className="flex items-center gap-3 rounded-md border border-border bg-surface-elevated p-3"
                       >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-brand/20 bg-brand/5">
+                          <FileCode className="h-4 w-4 text-brand" />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium text-foreground">
+                            {file.name}
+                          </p>
+                          <p className="mt-0.5 text-[10px] font-mono text-foreground-muted">
+                            {(file.size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-brand" />
+
+                        <button
+                          type="button"
+                          onClick={() => removeFile(file.name)}
+                          disabled={isSubmitting}
+                          aria-label={`Remove ${file.name}`}
+                          className="rounded-md p-2 text-foreground-muted transition-colors hover:bg-[#ef7770]/10 hover:text-[#ef7770] disabled:opacity-40"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-            </Field>
+
+              <p className="text-[11px] leading-relaxed text-foreground-muted">
+                Only attach files relevant to the issue. File contents
+                are submitted to the server for analysis; avoid including
+                credentials, private keys, or other sensitive information.
+              </p>
+            </section>
 
             {/* Submit */}
-            <div className="pt-4 border-t border-border flex items-center justify-between gap-4">
-              <p className="text-[11px] text-foreground-muted">
-                Processing happens server-side. Your code is never stored or executed.
+            <div className="space-y-4 border-t border-border pt-5">
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-foreground">
+                    Ready to investigate?
+                  </p>
+                  <p className="max-w-sm text-[11px] leading-relaxed text-foreground-muted">
+                    ForgeMind will analyze the provided evidence and
+                    generate a diagnostic report.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={
+                    isSubmitting ||
+                    title.trim().length < 3 ||
+                    errorMessage.trim().length < 5 ||
+                    pendingFileReads.current > 0
+                  }
+                  className="group inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand px-5 py-3 text-sm font-semibold text-background shadow-md shadow-brand/15 transition-all duration-200 hover:-translate-y-0.5 hover:bg-brand-light active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 sm:w-auto"
+                >
+                  <span>Analyze with ForgeMind</span>
+                  <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                </button>
+              </div>
+
+              <p className="text-center text-[10px] leading-relaxed text-foreground-muted sm:text-left">
+                Diagnostic results are generated from the evidence and
+                context you provide. Always verify suggested changes in
+                your Unity project.
               </p>
-              <button
-                type="submit"
-                disabled={isSubmitting || title.trim().length < 3 || errorMessage.trim().length < 5}
-                className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-brand text-background hover:bg-brand-light font-semibold text-sm transition-all duration-150 shadow-md shadow-brand/15 active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
-              >
-                <span>Analyze with ForgeMind</span>
-                <ArrowRight className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5 group-disabled:translate-x-0" />
-              </button>
             </div>
           </form>
         )}

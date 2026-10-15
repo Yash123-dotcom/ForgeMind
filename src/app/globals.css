@@ -352,4 +352,183 @@ textarea {
    ============================================================ */
 .fm-stage-progress {
   animation: fm-progress 1s var(--ease-out) both;
+
+  
 }
+
+/* ==========================================
+   ForgeMind — Frontend Polish
+   ========================================== */
+
+html {
+  scroll-behavior: smooth;
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(
+      ellipse at 50% -18%,
+      rgba(18, 168, 115, 0.075),
+      transparent 38rem
+    ),
+    var(--background);
+  font-kerning: normal;
+  font-optical-sizing: auto;
+}
+
+/* Refined typography */
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+::selection {
+  color: var(--foreground);
+  background: rgba(18, 168, 115, 0.3);
+}
+
+/* Smooth, professional interactions */
+a,
+button,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px) scale(0.99);
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Premium card surfaces */
+.fm-surface-card {
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.025),
+      transparent 42%
+    ),
+    var(--surface);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.025) inset,
+    0 12px 32px rgba(0, 0, 0, 0.12);
+  transition:
+    border-color 280ms var(--ease-out),
+    box-shadow 280ms var(--ease-out),
+    transform 280ms var(--ease-out);
+}
+
+.fm-surface-card:hover {
+  border-color: rgba(255, 255, 255, 0.13);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.035) inset,
+    0 16px 38px rgba(0, 0, 0, 0.2);
+}
+
+.fm-interactive-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(18, 168, 115, 0.28);
+}
+
+/* Reusable page entrance */
+.fm-page-enter {
+  animation: fm-enter 420ms var(--ease-out) both;
+}
+
+/* Stagger children for a polished dashboard entrance */
+.fm-stagger > * {
+  animation: fm-enter 380ms var(--ease-out) both;
+}
+
+.fm-stagger > *:nth-child(1) {
+  animation-delay: 35ms;
+}
+
+.fm-stagger > *:nth-child(2) {
+  animation-delay: 75ms;
+}
+
+.fm-stagger > *:nth-child(3) {
+  animation-delay: 115ms;
+}
+
+.fm-stagger > *:nth-child(4) {
+  animation-delay: 155ms;
+}
+
+.fm-stagger > *:nth-child(5) {
+  animation-delay: 195ms;
+}
+
+.fm-stagger > *:nth-child(6) {
+  animation-delay: 235ms;
+}
+
+/* Better form focus feedback */
+input,
+select,
+textarea {
+  accent-color: var(--brand);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--foreground-muted);
+  opacity: 1;
+}
+
+.fm-input:focus,
+.fm-input:focus-visible {
+  border-color: rgba(18, 168, 115, 0.8);
+  box-shadow: 0 0 0 3px rgba(18, 168, 115, 0.12);
+}
+
+/* Technical text and logs */
+pre {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  tab-size: 2;
+}
+
+code,
+kbd {
+  font-variant-ligatures: contextual;
+}
+
+/* Touch-device and accessibility support */
+@media (hover: none) {
+  .fm-interactive-card:hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .fm-page-enter,
+  .fm-stagger > * {
+    animation: none !important;
+  }
+
+  .fm-surface-card,
+  .fm-interactive-card {
+    transition: none !important;
+  }
+}
+
