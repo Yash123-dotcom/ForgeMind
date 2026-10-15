@@ -38,7 +38,7 @@ describe('Unity Deterministic Rules Engine', () => {
 
     assert.ok(finding !== null);
     assert.equal(finding.ruleId, 'UNITY-RULE-NULLREF');
-    assert.equal(finding.severity, 'critical');
+    assert.equal(finding.severity, 'high');
     assert.match(finding.evidence, /Assets\/Scripts\/PlayerController\.cs \(Line 42\)/);
   });
 
@@ -127,5 +127,41 @@ describe('Unity Deterministic Rules Engine', () => {
     assert.ok(result.findings.length >= 1);
     assert.equal(result.findings[0].ruleId, 'UNITY-RULE-CS0246');
   });
+
+    it('does not flag an unrelated mention of pink as a shader mismatch', () => {
+    const finding = pipelineShaderRule.evaluate({
+      errorMessage: 'The settings panel background is pink.',
+      codeSnippet: 'const label = "pink";',
+      unityVersion: '2022.3 LTS',
+      renderPipeline: 'urp',
+    });
+
+    assert.equal(finding, null);
+  });
+
+  it('detects a pink material explicitly linked to a shader problem', () => {
+    const finding = pipelineShaderRule.evaluate({
+      errorMessage: 'Material renders pink because its shader is unsupported in URP.',
+      unityVersion: '2022.3 LTS',
+      renderPipeline: 'urp',
+    });
+
+    assert.ok(finding !== null);
+    assert.equal(finding.ruleId, 'UNITY-RULE-PIPELINE-MISMATCH');
+  });
+
+
+  it('uses medium severity when a NullReferenceException has no project stack frame', () => {
+  const finding = nullRefRule.evaluate({
+    errorMessage:
+      'NullReferenceException: Object reference not set to an instance of an object',
+    unityVersion: '2022.3 LTS',
+    renderPipeline: 'urp',
+  });
+
+  assert.ok(finding !== null);
+  assert.equal(finding.severity, 'medium');
+  assert.match(finding.evidence, /line not found/i);
+});
 });
 
