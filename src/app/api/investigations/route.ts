@@ -5,10 +5,14 @@ import { runDeterministicAnalysis } from '@/lib/diagnostic-engine';
 import { isAiConfigured, requestAiDiagnosis, buildDeterministicFallbackReport } from '@/lib/ai/provider';
 import { getAllInvestigations, saveInvestigation } from '@/lib/db';
 import { Investigation, DiagnosticReport } from '@/lib/types';
+import { blockUnauthenticatedProductionApi } from '@/lib/security/public-launch-guard';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const blocked = blockUnauthenticatedProductionApi();
+  if (blocked) return blocked;
+
   try {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get('q')?.toLowerCase();
@@ -43,6 +47,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const blocked = blockUnauthenticatedProductionApi();
+  if (blocked) return blocked;
+
   try {
     const body = await req.json();
 

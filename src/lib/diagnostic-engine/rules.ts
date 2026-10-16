@@ -113,59 +113,62 @@ export const cs0246Rule: UnityDiagnosticRule = {
 
 export const nullRefRule: UnityDiagnosticRule = {
   id: "UNITY-RULE-NULLREF",
-
   name: "NullReferenceException Call Stack Analyzer",
 
   evaluate: (ctx) => {
     const error = ctx.errorMessage;
 
-    if (!error.includes("NullReferenceException")) return null;
+    if (!/NullReferenceException/i.test(error)) {
+      return null;
+    }
 
-    // Extract stack frame
-
-    const stackFrameMatch = error.match(
-      /at\s+([A-Za-z0-9_.]+)\.([A-Za-z0-9_<>]+)\s*\([^)]*\)\s*(?:\[[^\]]*\])?\s*(?:in\s+([^:]+):line\s*(\d+)|in\s+([^:]+):(\d+))/i,
+    // Unity stack traces vary by Unity version, platform, and log formatter.
+    // Examples:
+    // PlayerController.Update() (at Assets/Scripts/PlayerController.cs:42)
+    // at PlayerController.Update() in Assets/Scripts/PlayerController.cs:line 42
+    // Assets\Scripts\PlayerController.cs:42
+    const unityFrame = error.match(
+      /([A-Za-z0-9_.<>]+)\.([A-Za-z0-9_<>]+)\s*\([^)]*\)\s*\(at\s+(.+?):(\d+)\)/i,
     );
 
-    let locationInfo = "Exact line not found in stack trace.";
+    const inFrame = error.match(
+      /at\s+([A-Za-z0-9_.<>]+)\.([A-Za-z0-9_<>]+)\s*\([^)]*\)\s+in\s+(.+?):line\s*(\d+)/i,
+    );
 
-    let file = "";
+    // Parse the project file and line independently so a minor formatting
+    // difference in the method frame does not discard useful location evidence.
+    const locationFrame = error.match(
+      /((?:Assets|Packages)[/\\][^\r\n()]*?\.cs)\s*:\s*(?:line\s*)?(\d+)/i,
+    );
 
-    let line = "";
+    const frame = unityFrame || inFrame;
+    const method = frame ? `${frame[1]}.${frame[2]}()` : null;
+    const file = frame?.[3] ?? locationFrame?.[1] ?? null;
+    const line = frame?.[4] ?? locationFrame?.[2] ?? null;
+    const hasLocation = Boolean(file && line);
 
-    let method = "";
+    const finding = hasLocation
+      ? `A NullReferenceException was reported${method ? ` at ${method}` : ""}, line ${line} of ${file}. The stack trace identifies the failure location, but does not by itself identify which reference was null.`
+      : "A NullReferenceException was detected, but the supplied error text does not identify a usable project-code location. The exact null reference remains unknown.";
 
-    if (stackFrameMatch) {
-      method = `${stackFrameMatch[1]}.${stackFrameMatch[2]}()`;
+    const evidence = hasLocation
+      ? `${file} (Line ${line})`
+      : "Observed evidence: NullReferenceException appears in the supplied error message. Project-code line not found in the provided stack trace.";
 
-      file = stackFrameMatch[3] || stackFrameMatch[5] || "";
-
-      line = stackFrameMatch[4] || stackFrameMatch[6] || "";
-
-      locationInfo = `Identified in method ${method} at ${file} (Line ${line})`;
-    }
+    const suggestedNextStep = hasLocation
+      ? `Open ${file} at line ${line}. Inspect each object dereference on that line, including chained expressions and component lookups. Check Inspector assignments and initialization order. Confirm which reference is null before applying a fix.`
+      : "Copy the complete Unity Console stack trace and locate the first frame that points to your own script. Inspect that line, then check the referenced objects and component lookups. Without a code location, the exact cause cannot yet be confirmed.";
 
     return {
       ruleId: "UNITY-RULE-NULLREF",
-
       title: "Runtime NullReferenceException Detected",
-
-      finding: `A runtime NullReferenceException was triggered. In Unity, this typically occurs when: (1) A serialized field [SerializeField] is unassigned in the Inspector, (2) GetComponent<T>() failed to locate the component and was dereferenced immediately, or (3) A Singleton/Manager instance is accessed before its Awake() initialization.`,
-
-      evidence:
-        locationInfo !== "Exact line not found in stack trace."
-          ? locationInfo
-          : "NullReferenceException detected; exact project-code line not found in stack trace.",
-
-      severity: file && line ? "high" : "medium",
-
-      suggestedNextStep:
-        file && line
-          ? `Inspect ${file} at line ${line}. Add null-conditional checks (?.) or explicit guard assertions: 'if (target == null) { Debug.LogError("Missing reference...", this); return; }'`
-          : "Check Inspector references for unlinked GameObjects/Components and verify GetComponent() return values before accessing members.",
-
+      finding,
+      evidence,
+      // Stack-trace availability indicates evidence quality, not issue impact.
+      severity: "medium",
+      suggestedNextStep,
       limitations:
-        "Exact variable name cannot be pinpointed without inspecting the compiled IL or executing debug stepping on the GameObject state in the scene hierarchy.",
+        "A stack trace can identify where the exception occurred, but not necessarily which reference was null. The relevant code and runtime object state are needed to confirm the exact cause.",
     };
   },
 };
@@ -215,7 +218,7 @@ export const pipelineShaderRule: UnityDiagnosticRule = {
 
         title: `Shader incompatible with Scriptable Render Pipeline (${ctx.renderPipeline.toUpperCase()})`,
 
-        finding: `The error or code references legacy Built-in Render Pipeline shader includes (UnityCG.cginc) or materials that do not compile under ${ctx.renderPipeline.toUpperCase()}. This is the primary cause of magenta/pink textures or black geometry.`,
+        finding: `The error or code references legacy Built-in Render Pipeline shader includes (UnityCG.cginc) or materials that do notcompile under ${ctx.renderPipeline.toUpperCase()}. This is the primary cause of magenta/pink textures or black geometry.`,
 
         evidence: hasBuiltinIncludes
           ? "Found legacy includes (UnityCG.cginc / Lighting.cginc)."
@@ -454,7 +457,7 @@ export const monobehaviourNameRule: UnityDiagnosticRule = {
 
           title: `Script Filename Mismatch: ${csFile.name} vs class ${className}`,
 
-          finding: `Unity requires MonoBehaviour class names to match the C# file name exactly. Here file is '${csFile.name}' but the class is declared as 'class ${className} : MonoBehaviour'. Unity will fail to attach this component to GameObjects with "The script class cannot be found".`,
+          finding: `Unity requires MonoBehaviour class names to match the C# file name exactly. Here file is '${csFile.name}' but the class is declared as 'class ${className} : MonoBehaviour'. Unity will fail to attach this component to GameObjects with "The script classcannot be found".`,
 
           evidence: `File name: '${csFile.name}', Class declaration: '${className}'`,
 

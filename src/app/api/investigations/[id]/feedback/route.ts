@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { UserFeedbackSchema } from '@/lib/schemas';
 import { updateInvestigationFeedback } from '@/lib/db';
+import { blockUnauthenticatedProductionApi } from '@/lib/security/public-launch-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,6 +9,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const blocked = blockUnauthenticatedProductionApi();
+  if (blocked) return blocked;
+
   try {
     const body = await req.json();
     const parsed = UserFeedbackSchema.safeParse(body);

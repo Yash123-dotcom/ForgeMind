@@ -38,7 +38,7 @@ describe('Unity Deterministic Rules Engine', () => {
 
     assert.ok(finding !== null);
     assert.equal(finding.ruleId, 'UNITY-RULE-NULLREF');
-    assert.equal(finding.severity, 'high');
+    assert.equal(finding.severity, 'medium');
     assert.match(finding.evidence, /Assets\/Scripts\/PlayerController\.cs \(Line 42\)/);
   });
 

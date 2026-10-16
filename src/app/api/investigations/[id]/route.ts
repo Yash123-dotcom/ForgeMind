@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getInvestigationById, deleteInvestigation } from '@/lib/db';
+import { blockUnauthenticatedProductionApi } from '@/lib/security/public-launch-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,6 +8,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const blocked = blockUnauthenticatedProductionApi();
+  if (blocked) return blocked;
+
   try {
     const investigation = await getInvestigationById(params.id);
     if (!investigation) {
@@ -32,6 +36,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const blocked = blockUnauthenticatedProductionApi();
+  if (blocked) return blocked;
+
   try {
     const deleted = await deleteInvestigation(params.id);
     if (!deleted) {
