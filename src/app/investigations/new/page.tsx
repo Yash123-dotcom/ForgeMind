@@ -8,7 +8,6 @@ import React, {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/layout/AppShell';
-import { DiagnosticProgress } from '@/components/ui/DiagnosticProgress';
 import {
   UnityRenderPipeline,
   UnityVersion,
@@ -25,6 +24,7 @@ import {
   Cpu,
   CheckCircle2,
   LoaderCircle,
+  Clock,
 } from 'lucide-react';
 
 /* ============================================================
@@ -42,13 +42,6 @@ const ALLOWED_EXTENSIONS = [
   '.txt',
   '.log',
   '.asmdef',
-];
-
-const STAGES = [
-  'Validating parameters & uploaded evidence',
-  'Running deterministic Unity rules engine',
-  'Synthesizing diagnostic context with AI provider',
-  'Compiling evidence-backed report & verification steps',
 ];
 
 const SAMPLE_CASES = [
@@ -274,7 +267,7 @@ export default function NewInvestigationPage() {
     useState<UploadedFileContext[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [currentStage, setCurrentStage] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [validationError, setValidationError] =
     useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -300,7 +293,7 @@ export default function NewInvestigationPage() {
     []
   );
 
-  const clearProgressInterval = useCallback(() => {
+  const clearTimerInterval = useCallback(() => {
     if (progressIntervalRef.current !== null) {
       clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = null;
@@ -309,9 +302,9 @@ export default function NewInvestigationPage() {
 
   useEffect(() => {
     return () => {
-      clearProgressInterval();
+      clearTimerInterval();
     };
-  }, [clearProgressInterval]);
+  }, [clearTimerInterval]);
 
   /* ============================================================
      Sample Scenarios
@@ -507,17 +500,14 @@ export default function NewInvestigationPage() {
 
     submittingRef.current = true;
     setIsSubmitting(true);
-    setCurrentStage(0);
+    setElapsedSeconds(0);
 
-    clearProgressInterval();
+    clearTimerInterval();
 
+    const startTime = Date.now();
     progressIntervalRef.current = setInterval(() => {
-      setCurrentStage((previous) =>
-        previous < STAGES.length - 1
-          ? previous + 1
-          : previous
-      );
-    }, 1600);
+      setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+    }, 500);
 
     try {
       const response = await fetch('/api/investigations', {
@@ -558,8 +548,6 @@ export default function NewInvestigationPage() {
         );
       }
 
-      setCurrentStage(STAGES.length - 1);
-
       router.push(
         `/investigations/${encodeURIComponent(investigationId)}`
       );
@@ -570,7 +558,7 @@ export default function NewInvestigationPage() {
           : 'Diagnostic failed. Check your inputs and try again.'
       );
     } finally {
-      clearProgressInterval();
+      clearTimerInterval();
       submittingRef.current = false;
       setIsSubmitting(false);
     }
@@ -674,30 +662,29 @@ export default function NewInvestigationPage() {
           <section
             aria-live="polite"
             aria-busy="true"
-            className="fm-card animate-scale-in space-y-8 rounded-lg px-5 py-12 text-center sm:px-8"
+            className="fm-card animate-scale-in space-y-6 rounded-lg px-5 py-14 text-center sm:px-8"
           >
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-brand/20 bg-brand/5">
-              <LoaderCircle className="h-6 w-6 animate-spin text-brand" />
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-brand/20 bg-brand/5">
+              <LoaderCircle className="h-7 w-7 animate-spin text-brand" />
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-base font-semibold tracking-tight text-foreground">
-                Analyzing Investigation
+              <h2 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
+                Running Diagnostics
               </h2>
 
-              <p className="mx-auto max-w-md text-xs leading-relaxed text-foreground-secondary">
-                ForgeMind is processing your Unity error and
-                project context. The analysis may take a moment.
+              <p className="mx-auto max-w-md text-xs leading-relaxed text-foreground-secondary sm:text-sm">
+                Executing deterministic Unity rules and synthesizing diagnostic findings. Please wait while your report is generated.
               </p>
             </div>
 
-            <DiagnosticProgress
-              stages={STAGES}
-              currentStage={currentStage}
-            />
+            <div className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-elevated px-3 py-1.5 text-xs font-mono text-foreground-secondary">
+              <Clock className="h-3.5 w-3.5 text-brand" />
+              <span>Elapsed: {elapsedSeconds}s</span>
+            </div>
 
             <p className="text-[11px] font-mono text-foreground-muted">
-              Keep this tab open while your report is being generated.
+              Keep this window open. Results will open automatically upon completion.
             </p>
           </section>
         ) : (

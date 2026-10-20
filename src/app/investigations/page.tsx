@@ -109,18 +109,18 @@ function MetricCard({
 }) {
   return (
     <div
-      className="fm-surface-card space-y-1.5 rounded-lg p-4"
+      className="fm-surface-card space-y-2 rounded-lg p-4"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <p className="text-[10px] font-mono font-medium uppercase tracking-[0.14em] text-foreground-muted">
+      <p className="text-xs font-mono font-medium uppercase tracking-wider text-foreground-muted">
         {label}
       </p>
 
-      <p className="text-2xl font-bold tracking-tight text-foreground">
+      <p className="text-2xl font-semibold tracking-tight text-foreground">
         {value}
       </p>
 
-      <p className="text-[11px] leading-relaxed text-foreground-secondary">
+      <p className="text-xs leading-normal text-foreground-secondary">
         {sub}
       </p>
     </div>

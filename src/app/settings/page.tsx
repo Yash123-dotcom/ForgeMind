@@ -6,8 +6,8 @@ import { StatusDot } from '@/components/ui/Badges';
 import { Cpu, Database, Shield, Layers, Trash2, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface SystemStatus {
-  ai: { configured: boolean; model: string; baseUrl: string; maskedKey: string; mode: string };
-  storage: { mode: string; investigationsCount: number };
+  ai: { configured: boolean; model: string; baseUrl: string; maskedKey?: string; mode: string };
+  storage: { mode: 'neon_postgresql' | 'local_persistent_json' | string; investigationsCount: number };
   engine: { activeRulesCount: number; rules: { id: string; name: string }[] };
 }
 
@@ -61,15 +61,30 @@ function StatusBadge({ on, labelOn, labelOff }: { on: boolean; labelOn: string; 
 export default function SettingsPage() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const fetchStatus = () => {
     setLoading(true);
+    setFetchError(null);
     fetch('/api/system/status')
-      .then((r) => r.json())
-      .then((d) => d.success && setStatus(d.data))
-      .catch(console.error)
+      .then(async (r) => {
+        if (!r.ok) {
+          throw new Error(`Status unavailable (${r.status})`);
+        }
+        const d = await r.json();
+        if (d && d.success && d.data) {
+          setStatus(d.data);
+        } else {
+          throw new Error(d?.error || 'Status unavailable');
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load system status:', err);
+        setFetchError(err instanceof Error ? err.message : 'Status unavailable');
+        setStatus(null);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -114,6 +129,22 @@ export default function SettingsPage() {
           </button>
         </div>
 
+        {fetchError && (
+          <div className="flex items-center gap-2.5 p-3.5 rounded-md border border-[rgba(239,119,112,0.3)] bg-[rgba(239,119,112,0.06)] text-[#ef7770] text-xs animate-scale-in">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <div className="flex-1">
+              <span className="font-semibold">System status unavailable: </span>
+              {fetchError}
+            </div>
+            <button
+              onClick={fetchStatus}
+              className="text-xs font-mono underline hover:text-foreground transition-colors ml-2"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {message && (
           <div className="flex items-center gap-2.5 p-3 rounded-md border border-brand/25 bg-brand/8 text-brand text-xs animate-scale-in">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -127,14 +158,18 @@ export default function SettingsPage() {
           title="AI Diagnostic Provider"
           subtitle="Server-side LLM for contextual root-cause reasoning"
           badge={
-            status ? (
+            loading ? (
+              <span className="w-28 h-5 fm-skeleton" />
+            ) : status ? (
               <StatusBadge
                 on={status.ai.configured}
                 labelOn={`Active · ${status.ai.model}`}
                 labelOff="Deterministic Dev Mode"
               />
             ) : (
-              <span className="w-28 h-5 fm-skeleton" />
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-border bg-surface-elevated text-foreground-muted">
+                Status unavailable
+              </span>
             )
           }
           className="animate-enter delay-50"
@@ -144,12 +179,16 @@ export default function SettingsPage() {
             {[
               { label: 'Model', value: status?.ai.model },
               { label: 'Base URL', value: status?.ai.baseUrl },
-              { label: 'API Key', value: status?.ai.maskedKey },
+              { label: 'API Key', value: status ? (status.ai.configured ? 'Configured (Server)' : 'Not Set') : undefined },
             ].map(({ label, value }) => (
               <div key={label} className="p-3 rounded border border-border bg-surface-elevated space-y-1">
                 <p className="text-[10px] uppercase tracking-wider text-foreground-muted">{label}</p>
                 <p className="text-foreground font-semibold truncate">
-                  {value ?? <span className="fm-skeleton inline-block w-20 h-3 rounded" />}
+                  {loading ? (
+                    <span className="fm-skeleton inline-block w-20 h-3 rounded" />
+                  ) : (
+                    value ?? <span className="text-foreground-muted">—</span>
+                  )}
                 </p>
               </div>
             ))}
@@ -181,33 +220,45 @@ AI_BASE_URL="https://api.openai.com/v1"`}
           title="Deterministic Rules Engine"
           subtitle="Rule-based static checks that run before any LLM invocation"
           badge={
-            status ? (
+            loading ? (
+              <span className="w-24 h-5 fm-skeleton" />
+            ) : status ? (
               <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-border bg-surface-elevated text-foreground-secondary">
                 {status.engine.activeRulesCount} rules active
               </span>
-            ) : undefined
+            ) : (
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-border bg-surface-elevated text-foreground-muted">
+                Status unavailable
+              </span>
+            )
           }
           className="animate-enter delay-100"
         >
           <div className="space-y-1.5">
-            {status?.engine.rules.map((rule, i) => (
-              <div
-                key={rule.id}
-                className="flex items-center justify-between px-3 py-2 rounded border border-border bg-surface-elevated text-xs font-mono animate-enter"
-                style={{ animationDelay: `${i * 30}ms` }}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-brand font-semibold shrink-0">[{rule.id}]</span>
-                  <span className="text-foreground truncate">{rule.name}</span>
-                </div>
-                <span className="text-[10px] text-brand uppercase shrink-0 ml-2">Active</span>
-              </div>
-            )) ?? (
+            {loading ? (
               <div className="space-y-1.5">
                 {[...Array(4)].map((_, i) => (
                   <div key={i} className="h-8 fm-skeleton rounded" />
                 ))}
               </div>
+            ) : status ? (
+              status.engine.rules.map((rule, i) => (
+                <div
+                  key={rule.id}
+                  className="flex items-center justify-between px-3 py-2 rounded border border-border bg-surface-elevated text-xs font-mono animate-enter"
+                  style={{ animationDelay: `${i * 30}ms` }}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-brand font-semibold shrink-0">[{rule.id}]</span>
+                    <span className="text-foreground truncate">{rule.name}</span>
+                  </div>
+                  <span className="text-[10px] text-brand uppercase shrink-0 ml-2">Active</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-foreground-muted py-2">
+                Rule catalog could not be retrieved.
+              </p>
             )}
           </div>
         </Card>
@@ -218,31 +269,59 @@ AI_BASE_URL="https://api.openai.com/v1"`}
           title="Storage Engine"
           subtitle="Investigation records and diagnostic report persistence"
           badge={
-            status ? (
+            loading ? (
+              <span className="w-32 h-5 fm-skeleton" />
+            ) : status ? (
               <StatusBadge
-                on={status.storage.mode === 'supabase_postgresql'}
-                labelOn="Supabase PostgreSQL"
+                on={status.storage.mode === 'neon_postgresql'}
+                labelOn="Neon PostgreSQL"
                 labelOff="Local JSON Store"
               />
-            ) : undefined
+            ) : (
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-border bg-surface-elevated text-foreground-muted">
+                Status unavailable
+              </span>
+            )
           }
           className="animate-enter delay-150"
         >
-          <p className="text-xs text-foreground-secondary leading-relaxed">
-            Currently storing{' '}
-            <span className="font-mono font-semibold text-foreground">
-              {status?.storage.investigationsCount ?? '—'}
-            </span>{' '}
-            investigation reports in <code className="font-mono text-brand">data/forgemind.json</code>.
-            Reports persist across server restarts. To use Supabase, configure the environment
-            variables and run <code className="font-mono text-brand">supabase/schema.sql</code>.
-          </p>
+          <div className="space-y-2 text-xs leading-relaxed text-foreground-secondary">
+            {loading ? (
+              <div className="space-y-2">
+                <div className="h-4 w-3/4 fm-skeleton rounded" />
+                <div className="h-4 w-1/2 fm-skeleton rounded" />
+              </div>
+            ) : status ? (
+              status.storage.mode === 'neon_postgresql' ? (
+                <p>
+                  Connected to <span className="font-semibold text-foreground">Neon Serverless PostgreSQL</span>. Currently tracking{' '}
+                  <span className="font-mono font-semibold text-foreground">
+                    {status.storage.investigationsCount}
+                  </span>{' '}
+                  persistent investigation {status.storage.investigationsCount === 1 ? 'record' : 'records'} with diagnostic reports and feedback.
+                </p>
+              ) : (
+                <p>
+                  Operating in <span className="font-semibold text-foreground">Local JSON Storage mode</span>. Currently storing{' '}
+                  <span className="font-mono font-semibold text-foreground">
+                    {status.storage.investigationsCount}
+                  </span>{' '}
+                  investigation {status.storage.investigationsCount === 1 ? 'report' : 'reports'} in <code className="font-mono text-brand">data/forgemind.json</code>.
+                  To activate Neon PostgreSQL persistence, configure <code className="font-mono text-brand">DATABASE_URL</code> in <code className="font-mono text-brand">.env.local</code>.
+                </p>
+              )
+            ) : (
+              <p className="text-foreground-muted">
+                Storage engine status is currently unavailable. Check system logs or verify network connectivity.
+              </p>
+            )}
+          </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-border">
-            <span className="text-xs text-foreground-muted">Clear all stored investigation records:</span>
+            <span className="text-xs text-foreground-muted">Clear stored investigation records:</span>
             <button
               onClick={handleClear}
-              disabled={clearing || (status?.storage.investigationsCount ?? 0) === 0}
+              disabled={clearing || !status || status.storage.investigationsCount === 0}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-[rgba(239,119,112,0.3)] bg-[rgba(239,119,112,0.06)] text-[#ef7770] hover:bg-[rgba(239,119,112,0.12)] text-xs font-mono transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Trash2 className="w-3.5 h-3.5" />

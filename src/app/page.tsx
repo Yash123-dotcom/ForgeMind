@@ -8,35 +8,21 @@ import { Logo } from '@/components/brand/Logo';
    Diagnostic Scan Visualization
    ============================================================ */
 
-function DiagnosticViz() {
+function HeroBackground() {
   return (
     <div
       aria-hidden="true"
-      className="fm-scan-container pointer-events-none absolute inset-0 hidden overflow-hidden sm:block"
+      className="fm-hero-backdrop pointer-events-none absolute inset-0"
     >
-      <svg
-        className="absolute inset-0 h-full w-full opacity-[0.035]"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <defs>
-          <pattern
-            id="grid"
-            width="28"
-            height="28"
-            patternUnits="userSpaceOnUse"
-          >
-            <path
-              d="M 28 0 L 0 0 0 28"
-              fill="none"
-              stroke="#92978f"
-              strokeWidth="0.5"
-            />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" />
-      </svg>
+      {/* Precision technical grid with soft central vignette */}
+      <div className="fm-hero-grid" />
 
-      <div className="fm-scan-line" />
+      {/* Subtle diagnostic wireframe corners (faint isometric accents at the edges) */}
+      <div className="fm-hero-wireframe-corner -top-12 -left-12 hidden md:block" />
+      <div className="fm-hero-wireframe-corner -top-12 -right-12 hidden md:block" />
+
+      {/* Soft gradient fade-out to integrate seamlessly into page below fold */}
+      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-background pointer-events-none" />
     </div>
   );
 }
@@ -50,7 +36,7 @@ function Hero() {
 
   return (
     <section className="relative overflow-hidden border-b border-border py-20 sm:py-28 sm:pb-32">
-      <DiagnosticViz />
+      <HeroBackground />
 
       <div className="relative z-10 mx-auto max-w-5xl space-y-8 px-4 text-center sm:px-6 lg:px-8">
         {/* Product badge */}
@@ -166,7 +152,7 @@ function ReportPreview() {
         </div>
 
         {/* Preview window */}
-        <div className="fm-surface-card fm-scan-container overflow-hidden rounded-lg">
+        <div className="fm-surface-card overflow-hidden rounded-lg">
           {/* Window chrome */}
           <div className="flex items-center gap-2 border-b border-border bg-surface-elevated px-4 py-3">
             <span className="h-2.5 w-2.5 rounded-full bg-[#ef7770]/60" />

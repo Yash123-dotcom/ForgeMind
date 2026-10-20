@@ -40,16 +40,16 @@ const SEVERITY_STYLES: Record<SeverityLevel, string> = {
 };
 
 const CONFIDENCE_STYLES: Record<ConfidenceLevel, string> = {
-  high:   'text-brand bg-brand/10 border border-brand/25',
-  medium: 'badge-medium',
-  low:    'text-foreground-secondary bg-surface-muted border border-border',
+  high:   'text-brand bg-brand/8 border border-brand/20',
+  medium: 'text-[#e2ad54] bg-[#e2ad54]/8 border border-[#e2ad54]/20',
+  low:    'text-foreground-secondary bg-surface-elevated border border-border',
 };
 
 const PIPELINE_STYLES: Record<string, string> = {
-  urp:     'text-[#4e97ff] bg-[rgba(78,151,255,0.08)] border border-[rgba(78,151,255,0.2)]',
-  hdrp:    'text-[#a78bfa] bg-[rgba(167,139,250,0.08)] border border-[rgba(167,139,250,0.2)]',
-  builtin: 'text-foreground-secondary bg-surface-muted border border-border',
-  unknown: 'text-foreground-muted bg-surface-muted border border-border',
+  urp:     'text-[#4e97ff] bg-[#4e97ff]/8 border border-[#4e97ff]/20',
+  hdrp:    'text-[#a78bfa] bg-[#a78bfa]/8 border border-[#a78bfa]/20',
+  builtin: 'text-foreground-secondary bg-surface-elevated border border-border',
+  unknown: 'text-foreground-muted bg-surface-elevated border border-border',
 };
 
 export function SeverityBadge({ level, className }: SeverityBadgeProps) {
