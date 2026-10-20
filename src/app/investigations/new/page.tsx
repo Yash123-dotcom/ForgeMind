@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   LoaderCircle,
   Clock,
+  HelpCircle,
 } from 'lucide-react';
 
 /* ============================================================
@@ -33,6 +34,7 @@ import {
 
 const MAX_FILES = 5;
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_CONTENT_LENGTH = 500000;
 
 const ALLOWED_EXTENSIONS = [
   '.cs',
@@ -386,6 +388,13 @@ export default function NewInvestigationPage() {
       try {
         const content = await readFileAsText(file);
 
+        if (content.length > MAX_CONTENT_LENGTH) {
+          setValidationError(
+            `"${file.name}" exceeds the 500,000-character content limit.`
+          );
+          continue;
+        }
+
         const duplicateAfterRead =
           attachedFilesRef.current.some(
             (attached) => attached.name === file.name
@@ -565,6 +574,107 @@ export default function NewInvestigationPage() {
   };
 
   /* ============================================================
+     Evidence Coverage Heuristics
+     ============================================================ */
+
+  const evidenceCoverage = React.useMemo(() => {
+    const combinedText = `${errorMessage} ${codeSnippet} ${projectContext}`.toLowerCase();
+    const attachedNames = attachedFiles.map((f) => f.name.toLowerCase());
+    const hasAttached = (ext: string) => attachedNames.some((n) => n.endsWith(ext));
+    const hasName = (name: string) => attachedNames.some((n) => n === name.toLowerCase());
+
+    const items: Array<{
+      id: string;
+      label: string;
+      status: 'Provided' | 'Recommended' | 'Optional';
+      detail: string;
+    }> = [];
+
+    // 1. C# Script recommendation (NullReferenceException, stack trace, or CS errors)
+    const hasStackOrNullRef =
+      combinedText.includes('nullreferenceexception') ||
+      combinedText.includes('stack trace') ||
+      combinedText.includes('at ') ||
+      combinedText.includes('.cs:');
+    if (hasStackOrNullRef) {
+      const provided = hasAttached('.cs') || codeSnippet.trim().length > 0;
+      items.push({
+        id: 'csharp_script',
+        label: 'C# Script',
+        status: provided ? 'Provided' : 'Recommended',
+        detail: provided
+          ? 'Script or snippet included for call stack analysis.'
+          : 'Attach relevant .cs script or paste snippet for stack frame analysis.',
+      });
+    }
+
+    // 2. Shader / HLSL file recommendation
+    const hasShaderSignal =
+      combinedText.includes('shader') ||
+      combinedText.includes('hlsl') ||
+      combinedText.includes('urp') ||
+      combinedText.includes('hdrp') ||
+      combinedText.includes('universalforward') ||
+      combinedText.includes('pink') ||
+      combinedText.includes('magenta');
+    if (hasShaderSignal) {
+      const provided = hasAttached('.shader') || hasAttached('.hlsl');
+      items.push({
+        id: 'shader_file',
+        label: 'Shader / HLSL File',
+        status: provided ? 'Provided' : 'Recommended',
+        detail: provided
+          ? 'Shader source attached for pass and include inspection.'
+          : 'Attach .shader or .hlsl file to verify pass tags and include directives.',
+      });
+    }
+
+    // 3. Package manifest / Assembly definition
+    const hasDependencySignal =
+      combinedText.includes('cs0246') ||
+      combinedText.includes('namespace') ||
+      combinedText.includes('assembly') ||
+      combinedText.includes('package') ||
+      combinedText.includes('dependency');
+    if (hasDependencySignal) {
+      const manifestProvided = hasName('manifest.json') || hasAttached('.json');
+      items.push({
+        id: 'manifest_json',
+        label: 'Packages Manifest (manifest.json)',
+        status: manifestProvided ? 'Provided' : 'Recommended',
+        detail: manifestProvided
+          ? 'Package manifest attached for package dependency verification.'
+          : 'Attach Packages/manifest.json to verify missing package references.',
+      });
+
+      const asmdefProvided = hasAttached('.asmdef');
+      items.push({
+        id: 'asmdef_file',
+        label: 'Assembly Definition (.asmdef)',
+        status: asmdefProvided ? 'Provided' : 'Optional',
+        detail: asmdefProvided
+          ? 'Assembly definition attached for compilation references.'
+          : 'Optional: attach .asmdef if the script belongs to a custom assembly.',
+      });
+    }
+
+    // 4. Reproduction details
+    const hasReproDetails = projectContext.trim().length > 20;
+    if (errorMessage.trim().length >= 5) {
+      items.push({
+        id: 'reproduction_context',
+        label: 'Reproduction & Changes Context',
+        status: hasReproDetails ? 'Provided' : 'Optional',
+        detail: hasReproDetails
+          ? 'Reproduction context and recent changes provided.'
+          : 'Optional: provide reproduction steps or recent changes (e.g. Unity upgrade).',
+      });
+    }
+
+    return items;
+  }, [errorMessage, codeSnippet, projectContext, attachedFiles]);
+
+  /* ============================================================
      Shared Styles
      ============================================================ */
 
@@ -599,6 +709,13 @@ export default function NewInvestigationPage() {
             Submit a console error or stack trace with project
             context to generate an evidence-backed diagnostic report.
           </p>
+
+          <div className="flex items-start gap-2 rounded-md border border-border/80 bg-surface/50 p-2.5 text-[11px] leading-relaxed text-foreground-muted">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground-secondary" />
+            <span>
+              ForgeMind analyzes submitted error logs, code snippets, and supported text evidence files. It does not open local Unity projects, execute code, import assets, or compile projects.
+            </span>
+          </div>
         </header>
 
         {/* Starter Scenarios */}
@@ -714,7 +831,7 @@ export default function NewInvestigationPage() {
                   type="text"
                   required
                   minLength={3}
-                  maxLength={200}
+                  maxLength={120}
                   autoComplete="off"
                   placeholder="e.g. CS0246 unresolved namespace in PlayerController"
                   value={title}
@@ -911,6 +1028,60 @@ export default function NewInvestigationPage() {
                 />
               </Field>
             </section>
+
+            {/* Evidence Coverage */}
+            {evidenceCoverage.length > 0 && (
+              <section
+                className="fm-card animate-enter space-y-3.5 rounded-lg p-4 sm:p-5"
+                style={{ animationDelay: '120ms' }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <h2 className="text-sm font-semibold text-foreground">
+                      Evidence Coverage
+                    </h2>
+                    <p className="text-xs text-foreground-secondary">
+                      Advisory recommendations based on your error signals and context.
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-mono text-foreground-muted">
+                    Advisory only
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {evidenceCoverage.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-start justify-between gap-3 rounded-md border border-border bg-surface-elevated p-2.5 text-xs"
+                    >
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">
+                            {item.label}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-foreground-muted">
+                          {item.detail}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`inline-flex shrink-0 items-center rounded px-2 py-0.5 text-[10px] font-medium ${
+                          item.status === 'Provided'
+                            ? 'border border-brand/30 bg-brand/10 text-brand'
+                            : item.status === 'Recommended'
+                            ? 'border border-amber-500/30 bg-amber-500/10 text-amber-400'
+                            : 'border border-border bg-surface text-foreground-muted'
+                        }`}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {/* File Attachments */}
             <section

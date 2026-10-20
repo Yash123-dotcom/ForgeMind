@@ -163,5 +163,54 @@ describe('Unity Deterministic Rules Engine', () => {
   assert.equal(finding.severity, 'medium');
   assert.match(finding.evidence, /line not found/i);
 });
+
+  it('does not flag an informational InputAction mention as a missing package', () => {
+    const finding = packageManifestRule.evaluate({
+      errorMessage: 'Documentation note: InputAction is a Unity input API.',
+      unityVersion: '2022.3 LTS',
+      renderPipeline: 'urp',
+      attachedFiles: [
+        {
+          name: 'manifest.json',
+          size: 30,
+          type: 'application/json',
+          content: JSON.stringify({ dependencies: {} }),
+        },
+      ],
+    });
+
+    assert.equal(finding, null);
+  });
+
+  it('does not produce a package finding when manifest JSON is malformed', () => {
+    const finding = packageManifestRule.evaluate({
+      errorMessage:
+        "error CS0246: The type or namespace name 'InputAction' could not be found",
+      unityVersion: '2022.3 LTS',
+      renderPipeline: 'urp',
+      attachedFiles: [
+        {
+          name: 'manifest.json',
+          size: 20,
+          type: 'application/json',
+          content: '{ invalid json',
+        },
+      ],
+    });
+
+    assert.equal(finding, null);
+  });
+
+  it('does not treat an ordinary null mention as a NullReferenceException', () => {
+    const finding = nullRefRule.evaluate({
+      errorMessage: 'The configuration value is null.',
+      unityVersion: '2022.3 LTS',
+      renderPipeline: 'urp',
+    });
+
+    assert.equal(finding, null);
+  });
+
+
 });
 

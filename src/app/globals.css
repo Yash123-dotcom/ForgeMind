@@ -692,6 +692,41 @@ textarea {
   }
 }
 
+
+
+/* ============================================================
+   Accessible Scroll Reveals
+   ============================================================ */
+
+.fm-reveal {
+  opacity: 1;
+  transform: none;
+}
+
+.fm-reveal.fm-reveal-pending {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.fm-reveal.fm-reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 450ms var(--ease-out),
+    transform 450ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fm-reveal,
+  .fm-reveal.fm-reveal-pending,
+  .fm-reveal.fm-reveal-visible {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+
 /* ============================================================
    Reduced Motion
    ============================================================ */

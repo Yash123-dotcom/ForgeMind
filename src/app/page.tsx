@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ArrowRight, Check, CheckCircle2, Shield } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Logo } from '@/components/brand/Logo';
+import { Reveal } from '@/components/ui/Reveal';
 
 /* ============================================================
    Diagnostic Scan Visualization
@@ -14,15 +15,12 @@ function HeroBackground() {
       aria-hidden="true"
       className="fm-hero-backdrop pointer-events-none absolute inset-0"
     >
-      {/* Precision technical grid with soft central vignette */}
       <div className="fm-hero-grid" />
 
-      {/* Subtle diagnostic wireframe corners (faint isometric accents at the edges) */}
       <div className="fm-hero-wireframe-corner -top-12 -left-12 hidden md:block" />
       <div className="fm-hero-wireframe-corner -top-12 -right-12 hidden md:block" />
 
-      {/* Soft gradient fade-out to integrate seamlessly into page below fold */}
-      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-background pointer-events-none" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-background" />
     </div>
   );
 }
@@ -39,7 +37,6 @@ function Hero() {
       <HeroBackground />
 
       <div className="relative z-10 mx-auto max-w-5xl space-y-8 px-4 text-center sm:px-6 lg:px-8">
-        {/* Product badge */}
         <div
           className={`${entrance} mx-auto inline-flex items-center gap-2.5 rounded-full border border-border bg-surface/80 px-3.5 py-1.5 text-[11px] font-mono tracking-wide text-foreground-secondary shadow-xs backdrop-blur-sm`}
         >
@@ -54,7 +51,6 @@ function Hero() {
           <span className="font-medium text-brand">v0.1 Preview</span>
         </div>
 
-        {/* Main heading */}
         <h1
           className={`${entrance} mx-auto max-w-4xl text-[clamp(2.5rem,6vw,4.75rem)] font-semibold leading-[1.08] tracking-[-0.05em] text-foreground`}
           style={{ animationDelay: '70ms' }}
@@ -67,7 +63,6 @@ function Hero() {
           </span>
         </h1>
 
-        {/* Subtitle */}
         <p
           className={`${entrance} mx-auto max-w-2xl text-[15px] font-normal leading-7 tracking-[-0.015em] text-foreground-secondary sm:text-lg sm:leading-8`}
           style={{ animationDelay: '140ms' }}
@@ -77,7 +72,6 @@ function Hero() {
           traceable root-cause reports.
         </p>
 
-        {/* Calls to action */}
         <div
           className={`${entrance} flex flex-col items-center justify-center gap-3.5 pt-2 sm:flex-row`}
           style={{ animationDelay: '210ms' }}
@@ -98,7 +92,6 @@ function Hero() {
           </Link>
         </div>
 
-        {/* Trust strip */}
         <div
           className={`${entrance} flex flex-wrap items-center justify-center gap-x-7 gap-y-3 pt-6 text-[11px] font-mono tracking-normal text-foreground-muted sm:gap-x-8`}
           style={{ animationDelay: '280ms' }}
@@ -127,8 +120,7 @@ function Hero() {
 function ReportPreview() {
   return (
     <section className="border-b border-border py-20 sm:py-28">
-      <div className="mx-auto max-w-6xl space-y-8 px-4 sm:px-6 lg:px-8">
-        {/* Section heading */}
+      <Reveal className="mx-auto max-w-6xl space-y-8 px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div className="space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand">
@@ -151,9 +143,7 @@ function ReportPreview() {
           </span>
         </div>
 
-        {/* Preview window */}
         <div className="fm-surface-card overflow-hidden rounded-lg">
-          {/* Window chrome */}
           <div className="flex items-center gap-2 border-b border-border bg-surface-elevated px-4 py-3">
             <span className="h-2.5 w-2.5 rounded-full bg-[#ef7770]/60" />
             <span className="h-2.5 w-2.5 rounded-full bg-[#e2ad54]/60" />
@@ -164,7 +154,6 @@ function ReportPreview() {
             </span>
           </div>
 
-          {/* Report header */}
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border bg-surface px-5 py-5 sm:px-6">
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2.5">
@@ -198,10 +187,8 @@ function ReportPreview() {
             </div>
           </div>
 
-          {/* Report body */}
           <div className="grid grid-cols-1 gap-7 p-5 sm:p-6 lg:grid-cols-3">
             <div className="min-w-0 space-y-6 lg:col-span-2">
-              {/* Executive summary */}
               <div className="space-y-2">
                 <p className="text-[10px] font-mono font-medium uppercase tracking-[0.15em] text-foreground-muted">
                   Executive Summary
@@ -221,7 +208,6 @@ function ReportPreview() {
                 </p>
               </div>
 
-              {/* Deterministic finding */}
               <div className="space-y-2 rounded-md border border-brand/20 bg-brand/5 p-4">
                 <div className="flex flex-wrap items-center gap-2 text-[11px]">
                   <span className="rounded bg-brand px-1.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-background">
@@ -242,7 +228,6 @@ function ReportPreview() {
                 </p>
               </div>
 
-              {/* Code diff */}
               <div className="space-y-2">
                 <p className="text-[10px] font-mono font-medium uppercase tracking-[0.15em] text-foreground-muted">
                   Suggested Code Change
@@ -275,7 +260,6 @@ function ReportPreview() {
               </div>
             </div>
 
-            {/* Verification sidebar */}
             <div className="min-w-0 space-y-6 lg:border-l lg:border-border lg:pl-6">
               <div className="space-y-3">
                 <p className="text-[10px] font-mono font-medium uppercase tracking-[0.15em] text-foreground-muted">
@@ -317,7 +301,7 @@ function ReportPreview() {
             </div>
           </div>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -347,7 +331,7 @@ const HOW_STEPS = [
 function HowItWorks() {
   return (
     <section className="border-b border-border py-20 sm:py-28">
-      <div className="mx-auto max-w-5xl space-y-12 px-4 sm:px-6 lg:px-8">
+      <Reveal className="mx-auto max-w-5xl space-y-12 px-4 sm:px-6 lg:px-8">
         <div className="space-y-3 text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand">
             Structured Process
@@ -387,7 +371,7 @@ function HowItWorks() {
             </div>
           ))}
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -399,7 +383,7 @@ function HowItWorks() {
 function PrivacyStrip() {
   return (
     <section className="border-b border-border bg-surface/30 py-16 sm:py-20">
-      <div className="mx-auto max-w-4xl space-y-5 px-4 text-center sm:px-6 lg:px-8">
+      <Reveal className="mx-auto max-w-4xl space-y-5 px-4 text-center sm:px-6 lg:px-8">
         <div className="inline-flex items-center gap-2 text-xs font-mono tracking-wide text-foreground-secondary">
           <Shield className="h-4 w-4 text-brand" />
           <span>Data Handling &amp; Safety</span>
@@ -415,7 +399,7 @@ function PrivacyStrip() {
           shell commands. Project files are only available when explicitly
           provided through the product&apos;s supported input workflow.
         </p>
-      </div>
+      </Reveal>
     </section>
   );
 }
