@@ -1,6 +1,7 @@
+
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { AppShell } from '@/components/layout/AppShell';
@@ -26,6 +27,10 @@ import {
   HelpCircle,
   ShieldAlert,
   FileCode,
+  Play,
+  Pause,
+  Square,
+  Volume2,
 } from 'lucide-react';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -178,6 +183,230 @@ function VerificationItem({
   );
 }
 
+/**
+ * Browser-native voice narration for a diagnostic report.
+ * No external voice API or additional package is required.
+ */
+function VoiceOutput({
+  title,
+  rootCause,
+  recommendedFix,
+  executiveSummary,
+}: {
+  title: string;
+  rootCause: string;
+  recommendedFix: string[];
+  executiveSummary: string;
+}) {
+  const [status, setStatus] = useState<
+    'idle' | 'speaking' | 'paused'
+  >('idle');
+  const [message, setMessage] = useState(
+    'Playback starts only when you press Play.',
+  );
+
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const sessionRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      // Invalidate pending callbacks before stopping speech.
+      sessionRef.current += 1;
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const buildSpeechText = () => {
+    const fixes =
+      recommendedFix.length > 0
+        ? `Recommended fixes. ${recommendedFix
+            .map((step, index) => `Step ${index + 1}. ${step}`)
+            .join('. ')}`
+        : 'No recommended fix steps were provided.';
+
+    return [
+      `ForgeMind diagnostic report: ${title}.`,
+      `Executive summary. ${executiveSummary}`,
+      `Likely root cause. ${rootCause}`,
+      fixes,
+      'Please verify the proposed diagnosis and changes in your Unity project before applying them.',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  };
+
+  const handlePlay = () => {
+    if (!('speechSynthesis' in window)) {
+      setMessage(
+        'Speech playback is not supported in this browser. Try a recent version of Chrome or Edge.',
+      );
+      return;
+    }
+
+    if (status === 'paused') {
+      window.speechSynthesis.resume();
+      setStatus('speaking');
+      setMessage('Resuming diagnostic narration.');
+      return;
+    }
+
+    if (status === 'speaking') return;
+
+    const text = buildSpeechText().trim();
+
+    if (!text) {
+      setMessage('There is no report content available to read.');
+      return;
+    }
+
+    // Invalidate any previous utterance callbacks.
+    const session = ++sessionRef.current;
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 1;
+    utterance.pitch = 1;
+
+    utterance.onstart = () => {
+      if (sessionRef.current !== session) return;
+
+      setStatus('speaking');
+      setMessage('Reading your diagnostic report.');
+    };
+
+    utterance.onend = () => {
+      if (sessionRef.current !== session) return;
+
+      utteranceRef.current = null;
+      setStatus('idle');
+      setMessage('Narration completed.');
+    };
+
+    utterance.onerror = (event) => {
+      if (sessionRef.current !== session) return;
+
+      utteranceRef.current = null;
+      setStatus('idle');
+
+      if (
+        event.error === 'canceled' ||
+        event.error === 'interrupted'
+      ) {
+        setMessage('Narration stopped.');
+      } else {
+        setMessage('Speech playback failed. Please try again.');
+      }
+    };
+
+    utteranceRef.current = utterance;
+    setMessage('Preparing narration.');
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handlePause = () => {
+    if (!('speechSynthesis' in window)) return;
+    if (status !== 'speaking') return;
+
+    window.speechSynthesis.pause();
+    setStatus('paused');
+    setMessage('Narration paused.');
+  };
+
+  const handleStop = () => {
+    // Invalidate callbacks from the active utterance.
+    sessionRef.current += 1;
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    utteranceRef.current = null;
+    setStatus('idle');
+    setMessage('Narration stopped.');
+  };
+
+  return (
+    <section
+      aria-label="Voice narration"
+      className="rounded-lg border border-brand/20 bg-brand/5 p-4 sm:p-5 space-y-3"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-lg border border-brand/20 bg-brand/10 flex items-center justify-center shrink-0">
+          <Volume2 className="w-4 h-4 text-brand" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm font-semibold text-foreground">
+            Listen to your diagnosis
+          </h2>
+          <p className="text-xs text-foreground-secondary mt-1 leading-relaxed">
+            Listen to the executive summary, likely root cause, and
+            recommended fixes. Verify the diagnosis in your Unity
+            project before applying changes.
+          </p>
+        </div>
+
+        <span className="text-[10px] font-mono uppercase tracking-wider text-foreground-muted shrink-0">
+          {status === 'speaking'
+            ? 'Playing'
+            : status === 'paused'
+              ? 'Paused'
+              : 'Voice'}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={handlePlay}
+          disabled={status === 'speaking'}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-md bg-brand text-background hover:bg-brand-light text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {status === 'paused' ? (
+            <Play className="w-3.5 h-3.5" />
+          ) : (
+            <Play className="w-3.5 h-3.5" />
+          )}
+          {status === 'paused' ? 'Resume' : 'Play narration'}
+        </button>
+
+        <button
+          type="button"
+          onClick={handlePause}
+          disabled={status !== 'speaking'}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-surface hover:bg-surface-elevated text-xs font-medium text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Pause className="w-3.5 h-3.5" />
+          Pause
+        </button>
+
+        <button
+          type="button"
+          onClick={handleStop}
+          disabled={status === 'idle'}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-surface hover:bg-surface-elevated text-xs font-medium text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Square className="w-3 h-3" />
+          Stop
+        </button>
+      </div>
+
+      <p
+        role="status"
+        aria-live="polite"
+        className="text-[11px] text-foreground-muted min-h-4"
+      >
+        {message}
+      </p>
+    </section>
+  );
+}
+
 export default function ReportPage() {
   const params = useParams();
   const id = params?.id as string | undefined;
@@ -219,7 +448,9 @@ export default function ReportPage() {
         setError(null);
       } catch {
         if (!cancelled) {
-          setError('Unable to load the report. Check your connection and retry.');
+          setError(
+            'Unable to load the report. Check your connection and retry.',
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -540,6 +771,14 @@ Generated by ForgeMind.
           </div>
         </section>
 
+        {/* Voice narration */}
+        <VoiceOutput
+          title={investigation.title}
+          rootCause={report.likelyRootCause}
+          recommendedFix={report.recommendedFix}
+          executiveSummary={report.executiveSummary}
+        />
+
         {/* 1. Original error */}
         <section className="rounded-lg border border-[#ef7770]/25 bg-surface overflow-hidden">
           <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-border">
@@ -840,7 +1079,7 @@ Generated by ForgeMind.
           </div>
         </section>
 
-        {/* 9. Executive summary, available on demand */}
+        {/* 9. Executive summary */}
         <details className="rounded-lg border border-border bg-surface group">
           <summary className="cursor-pointer list-none p-4 flex items-center justify-between gap-3 text-xs font-mono text-foreground-secondary hover:text-foreground">
             <span>Executive Summary</span>

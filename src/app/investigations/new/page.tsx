@@ -26,6 +26,8 @@ import {
   LoaderCircle,
   Clock,
   HelpCircle,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 
 /* ============================================================
@@ -158,6 +160,55 @@ public class PlayerController : MonoBehaviour
 ];
 
 /* ============================================================
+   Browser Speech Recognition Types
+   ============================================================ */
+
+type BrowserSpeechRecognitionAlternative = {
+  transcript: string;
+};
+
+type BrowserSpeechRecognitionResult = {
+  isFinal: boolean;
+  length: number;
+  [index: number]: BrowserSpeechRecognitionAlternative;
+};
+
+type BrowserSpeechRecognitionEvent = {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: BrowserSpeechRecognitionResult;
+  };
+};
+
+type BrowserSpeechRecognitionErrorEvent = {
+  error: string;
+};
+
+interface BrowserSpeechRecognition {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult:
+    | ((event: BrowserSpeechRecognitionEvent) => void)
+    | null;
+  onerror:
+    | ((event: BrowserSpeechRecognitionErrorEvent) => void)
+    | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
+type SpeechRecognitionWindow = Window & {
+  SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+  webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+};
+
+/* ============================================================
    File Reader
    ============================================================ */
 
@@ -274,6 +325,40 @@ export default function NewInvestigationPage() {
     useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
+  /* Voice input state */
+  const [isListening, setIsListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] =
+    useState<boolean | null>(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  const recognitionRef =
+    useRef<BrowserSpeechRecognition | null>(null);
+
+  /* Detect browser speech-recognition support. */
+  useEffect(() => {
+    const speechWindow = window as SpeechRecognitionWindow;
+
+    setVoiceSupported(
+      Boolean(
+        speechWindow.SpeechRecognition ||
+          speechWindow.webkitSpeechRecognition
+      )
+    );
+
+    return () => {
+      const recognition = recognitionRef.current;
+      recognitionRef.current = null;
+
+      if (recognition) {
+        try {
+          recognition.abort();
+        } catch {
+          // Recognition may already have ended.
+        }
+      }
+    };
+  }, []);
+
   /* Keep the state and ref in sync so rapid file selections
      cannot exceed the attachment limit. */
   const updateAttachedFiles = useCallback(
@@ -309,6 +394,121 @@ export default function NewInvestigationPage() {
   }, [clearTimerInterval]);
 
   /* ============================================================
+     Voice Input
+     ============================================================ */
+
+  const stopListening = useCallback(() => {
+    const recognition = recognitionRef.current;
+
+    if (!recognition) {
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      recognition.stop();
+    } catch {
+      recognitionRef.current = null;
+      setIsListening(false);
+    }
+  }, []);
+
+  const startListening = useCallback(() => {
+    if (isSubmitting || isListening) return;
+
+    const speechWindow = window as SpeechRecognitionWindow;
+
+    const SpeechRecognitionAPI =
+      speechWindow.SpeechRecognition ||
+      speechWindow.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionAPI) {
+      setVoiceError(
+        'Speech recognition is not supported in this browser. You can still type or paste your error.'
+      );
+      return;
+    }
+
+    setVoiceError(null);
+
+    try {
+      const recognition = new SpeechRecognitionAPI();
+
+      recognition.lang = 'en-US';
+      recognition.continuous = true;
+      recognition.interimResults = false;
+
+      recognition.onresult = (event) => {
+        const transcripts: string[] = [];
+
+        for (
+          let index = event.resultIndex;
+          index < event.results.length;
+          index++
+        ) {
+          const result = event.results[index];
+
+          if (result.isFinal && result[0]?.transcript) {
+            transcripts.push(result[0].transcript.trim());
+          }
+        }
+
+        const transcript = transcripts
+          .filter(Boolean)
+          .join('\n');
+
+        if (transcript) {
+          setErrorMessage((previous) =>
+            previous.trim()
+              ? `${previous.trimEnd()}\n${transcript}`
+              : transcript
+          );
+        }
+      };
+
+      recognition.onerror = (event) => {
+        const messages: Record<string, string> = {
+          'not-allowed':
+            'Microphone access was denied. Allow microphone access in your browser settings, or type your error instead.',
+          'service-not-allowed':
+            'The browser speech service is unavailable or blocked.',
+          'no-speech':
+            'No speech was detected. Try again and speak clearly.',
+          'audio-capture':
+            'No working microphone was found. Check your microphone connection.',
+          network:
+            'The browser speech service encountered a network error. You can type or paste your error instead.',
+          aborted: '',
+        };
+
+        setVoiceError(
+          messages[event.error] ??
+            'Speech recognition stopped unexpectedly. You can retry or type your error.'
+        );
+      };
+
+      recognition.onend = () => {
+        if (recognitionRef.current === recognition) {
+          recognitionRef.current = null;
+        }
+
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      setIsListening(true);
+      recognition.start();
+    } catch {
+      recognitionRef.current = null;
+      setIsListening(false);
+
+      setVoiceError(
+        'Could not start speech recognition. Check microphone permissions and try again.'
+      );
+    }
+  }, [isSubmitting, isListening]);
+
+  /* ============================================================
      Sample Scenarios
      ============================================================ */
 
@@ -317,6 +517,11 @@ export default function NewInvestigationPage() {
   ) => {
     if (isSubmitting) return;
 
+    if (recognitionRef.current) {
+      stopListening();
+    }
+
+    setVoiceError(null);
     setTitle(sample.title);
     setErrorMessage(sample.error);
     setCodeSnippet(sample.code);
@@ -484,6 +689,10 @@ export default function NewInvestigationPage() {
 
     if (submittingRef.current) return;
 
+    if (recognitionRef.current) {
+      stopListening();
+    }
+
     setValidationError(null);
 
     if (title.trim().length < 3) {
@@ -514,8 +723,11 @@ export default function NewInvestigationPage() {
     clearTimerInterval();
 
     const startTime = Date.now();
+
     progressIntervalRef.current = setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+      setElapsedSeconds(
+        Math.floor((Date.now() - startTime) / 1000)
+      );
     }, 500);
 
     try {
@@ -578,10 +790,20 @@ export default function NewInvestigationPage() {
      ============================================================ */
 
   const evidenceCoverage = React.useMemo(() => {
-    const combinedText = `${errorMessage} ${codeSnippet} ${projectContext}`.toLowerCase();
-    const attachedNames = attachedFiles.map((f) => f.name.toLowerCase());
-    const hasAttached = (ext: string) => attachedNames.some((n) => n.endsWith(ext));
-    const hasName = (name: string) => attachedNames.some((n) => n === name.toLowerCase());
+    const combinedText =
+      `${errorMessage} ${codeSnippet} ${projectContext}`.toLowerCase();
+
+    const attachedNames = attachedFiles.map((f) =>
+      f.name.toLowerCase()
+    );
+
+    const hasAttached = (ext: string) =>
+      attachedNames.some((name) => name.endsWith(ext));
+
+    const hasName = (name: string) =>
+      attachedNames.some(
+        (attachedName) => attachedName === name.toLowerCase()
+      );
 
     const items: Array<{
       id: string;
@@ -590,14 +812,16 @@ export default function NewInvestigationPage() {
       detail: string;
     }> = [];
 
-    // 1. C# Script recommendation (NullReferenceException, stack trace, or CS errors)
     const hasStackOrNullRef =
       combinedText.includes('nullreferenceexception') ||
       combinedText.includes('stack trace') ||
       combinedText.includes('at ') ||
       combinedText.includes('.cs:');
+
     if (hasStackOrNullRef) {
-      const provided = hasAttached('.cs') || codeSnippet.trim().length > 0;
+      const provided =
+        hasAttached('.cs') || codeSnippet.trim().length > 0;
+
       items.push({
         id: 'csharp_script',
         label: 'C# Script',
@@ -608,7 +832,6 @@ export default function NewInvestigationPage() {
       });
     }
 
-    // 2. Shader / HLSL file recommendation
     const hasShaderSignal =
       combinedText.includes('shader') ||
       combinedText.includes('hlsl') ||
@@ -617,8 +840,11 @@ export default function NewInvestigationPage() {
       combinedText.includes('universalforward') ||
       combinedText.includes('pink') ||
       combinedText.includes('magenta');
+
     if (hasShaderSignal) {
-      const provided = hasAttached('.shader') || hasAttached('.hlsl');
+      const provided =
+        hasAttached('.shader') || hasAttached('.hlsl');
+
       items.push({
         id: 'shader_file',
         label: 'Shader / HLSL File',
@@ -629,15 +855,17 @@ export default function NewInvestigationPage() {
       });
     }
 
-    // 3. Package manifest / Assembly definition
     const hasDependencySignal =
       combinedText.includes('cs0246') ||
       combinedText.includes('namespace') ||
       combinedText.includes('assembly') ||
       combinedText.includes('package') ||
       combinedText.includes('dependency');
+
     if (hasDependencySignal) {
-      const manifestProvided = hasName('manifest.json') || hasAttached('.json');
+      const manifestProvided =
+        hasName('manifest.json') || hasAttached('.json');
+
       items.push({
         id: 'manifest_json',
         label: 'Packages Manifest (manifest.json)',
@@ -648,6 +876,7 @@ export default function NewInvestigationPage() {
       });
 
       const asmdefProvided = hasAttached('.asmdef');
+
       items.push({
         id: 'asmdef_file',
         label: 'Assembly Definition (.asmdef)',
@@ -658,8 +887,8 @@ export default function NewInvestigationPage() {
       });
     }
 
-    // 4. Reproduction details
     const hasReproDetails = projectContext.trim().length > 20;
+
     if (errorMessage.trim().length >= 5) {
       items.push({
         id: 'reproduction_context',
@@ -806,10 +1035,7 @@ export default function NewInvestigationPage() {
           </section>
         ) : (
           /* Investigation Form */
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-6"
-          >
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Required Evidence */}
             <section className="fm-card animate-enter space-y-5 rounded-lg p-4 sm:p-5">
               <div className="space-y-1">
@@ -847,23 +1073,86 @@ export default function NewInvestigationPage() {
                 required
                 charCount={errorMessage.length}
               >
-                <textarea
-                  id="unity-error"
-                  required
-                  minLength={5}
-                  rows={7}
-                  placeholder={`Paste Unity Console output, compiler errors, or a runtime stack trace...\n\nExample:\nNullReferenceException: Object reference not set to an instance of an object`}
-                  value={errorMessage}
-                  onChange={(event) =>
-                    setErrorMessage(event.target.value)
-                  }
-                  disabled={isSubmitting}
-                  className={textareaClass}
-                />
+                <div className="space-y-3">
+                  <textarea
+                    id="unity-error"
+                    required
+                    minLength={5}
+                    rows={7}
+                    placeholder={`Paste Unity Console output, compiler errors, or a runtime stack trace...\n\nExample:\nNullReferenceException: Object reference not set to an instance of an object`}
+                    value={errorMessage}
+                    onChange={(event) =>
+                      setErrorMessage(event.target.value)
+                    }
+                    disabled={isSubmitting}
+                    className={textareaClass}
+                  />
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!isListening ? (
+                      <button
+                        type="button"
+                        onClick={startListening}
+                        disabled={
+                          isSubmitting ||
+                          voiceSupported === null
+                        }
+                        className="inline-flex items-center gap-2 rounded-md border border-brand/30 bg-brand/5 px-3 py-2 text-xs font-medium text-brand transition-colors hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Mic className="h-3.5 w-3.5" />
+                        Dictate error
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={stopListening}
+                        className="inline-flex items-center gap-2 rounded-md border border-[#ef7770]/30 bg-[#ef7770]/5 px-3 py-2 text-xs font-medium text-[#ef7770] transition-colors hover:bg-[#ef7770]/10"
+                      >
+                        <MicOff className="h-3.5 w-3.5" />
+                        Stop listening
+                      </button>
+                    )}
+
+                    {isListening && (
+                      <span
+                        role="status"
+                        aria-live="polite"
+                        className="text-xs text-foreground-secondary"
+                      >
+                        Listening… Speak clearly, then stop when finished.
+                      </span>
+                    )}
+                  </div>
+
+                  {voiceSupported === false && (
+                    <p className="text-xs leading-relaxed text-foreground-muted">
+                      Voice input is unavailable in this browser. You can still type or paste your Unity error.
+                    </p>
+                  )}
+
+                  {voiceError && (
+                    <div
+                      role="alert"
+                      className="flex items-start gap-2 rounded-md border border-[#ef7770]/30 bg-[#ef7770]/5 p-3 text-xs leading-relaxed text-[#ef7770]"
+                    >
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span className="flex-1">{voiceError}</span>
+                      <button
+                        type="button"
+                        onClick={() => setVoiceError(null)}
+                        aria-label="Dismiss voice input message"
+                        className="rounded p-1 hover:bg-white/5"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <p className="text-[11px] leading-relaxed text-foreground-muted">
                   Include the full error message and stack trace when
                   available. Remove passwords, API keys, and other secrets.
+                  Speech recognition may use a browser-managed service.
                 </p>
               </Field>
             </section>
@@ -1071,8 +1360,8 @@ export default function NewInvestigationPage() {
                           item.status === 'Provided'
                             ? 'border border-brand/30 bg-brand/10 text-brand'
                             : item.status === 'Recommended'
-                            ? 'border border-amber-500/30 bg-amber-500/10 text-amber-400'
-                            : 'border border-border bg-surface text-foreground-muted'
+                              ? 'border border-amber-500/30 bg-amber-500/10 text-amber-400'
+                              : 'border border-border bg-surface text-foreground-muted'
                         }`}
                       >
                         {item.status}
