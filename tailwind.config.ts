@@ -10,35 +10,37 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "#080A08",
+        background: "#F7F7F2",
         surface: {
-          DEFAULT: "#0D100D",
-          elevated: "#131713",
-          hover: "#1A1F1A",
-          muted: "#181D18",
+          DEFAULT: "#FFFFFF",
+          elevated: "#FFFFFF",
+          hover: "#EFF0E9",
+          muted: "#F0F1EB",
         },
         foreground: {
-          DEFAULT: "#F2F2ED",
-          secondary: "#92978F",
-          muted: "#666B63",
+          DEFAULT: "#191A23",
+          secondary: "#55575E",
+          muted: "#777970",
         },
         border: {
-          DEFAULT: "rgba(255, 255, 255, 0.08)",
-          subtle: "rgba(255, 255, 255, 0.05)",
-          active: "rgba(255, 255, 255, 0.18)",
+          DEFAULT: "rgba(25, 26, 35, 0.12)",
+          subtle: "rgba(25, 26, 35, 0.07)",
+          active: "rgba(25, 26, 35, 0.22)",
         },
+        // Dark olive for readable text and icons.
+        // Primary action surfaces use lime (#B9FF66).
         brand: {
-          DEFAULT: "#12A873",
-          light: "#16C788",
-          dark: "#0D7F56",
-          subtle: "rgba(18, 168, 115, 0.12)",
+          DEFAULT: "#628D30",
+          light: "#B9FF66",
+          dark: "#35541C",
+          subtle: "rgba(98, 141, 48, 0.12)",
         },
         severity: {
-          info: "#4E97FF",
-          low: "#34D399",
-          medium: "#E2AD54",
-          high: "#F97316",
-          critical: "#EF7770",
+          info: "#2563EB",
+          low: "#267A4B",
+          medium: "#946200",
+          high: "#C2410C",
+          critical: "#C2413A",
         },
       },
       fontFamily: {
@@ -66,5 +68,5 @@ const config: Config = {
   },
   plugins: [],
 };
-export default config;
 
+export default config;

@@ -5,60 +5,42 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  --background: #080a08;
+  --background: #f7f7f2;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-hover: #eff0e9;
+  --surface-muted: #f0f1eb;
 
-  --surface: #0d100d;
+  --border: rgba(25, 26, 35, 0.12);
+  --border-active: rgba(25, 26, 35, 0.22);
 
-  --surface-elevated: #131713;
+  --foreground: #191a23;
+  --foreground-secondary: #55575e;
+  --foreground-muted: #777970;
 
-  --surface-hover: #1a1f1a;
+  --brand: #628d30;
+  --brand-light: #b9ff66;
 
-  --surface-muted: #181d18;
-
-  --border: rgba(255, 255, 255, 0.08);
-
-  --border-active: rgba(255, 255, 255, 0.18);
-
-  --foreground: #f2f2ed;
-
-  --foreground-secondary: #92978f;
-
-  --foreground-muted: #666b63;
-
-  --brand: #12a873;
-
-  --brand-light: #16c788;
-
-  --danger: #ef7770;
-
-  --warning: #e2ad54;
-
-  --info: #4e97ff;
+  --danger: #c2413a;
+  --warning: #946200;
+  --info: #2563eb;
 
   --dur-fast: 120ms;
-
   --dur-base: 180ms;
-
   --dur-slow: 280ms;
-
   --dur-enter: 360ms;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   --type-display: clamp(2.5rem, 6vw, 4.75rem);
-
   --type-h1: clamp(2.25rem, 4vw, 3.5rem);
-
   --type-h2: clamp(1.75rem, 3vw, 2.5rem);
-
   --type-h3: clamp(1.25rem, 2vw, 1.5rem);
 
   --tracking-display: -0.05em;
-
   --tracking-heading: -0.035em;
 }
 
@@ -2770,4 +2752,462 @@ textarea {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+/* ============================================================
+   FORGEMIND — LIGHT APP THEME
+   Shared application theme for dashboard, investigations,
+   diagnostic reports, settings, navigation, and forms.
+   The .fm-marketing landing page retains its own design.
+   ============================================================ */
+
+html {
+  color-scheme: light;
+}
+
+body {
+  color-scheme: light;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Shared text colors */
+.text-foreground {
+  color: #191a23;
+}
+.text-foreground-secondary {
+  color: #55575e;
+}
+.text-foreground-muted {
+  color: #777970;
+}
+
+/* Application backgrounds */
+.bg-background {
+  background-color: #f7f7f2;
+}
+.bg-surface {
+  background-color: #ffffff;
+}
+.bg-surface-elevated {
+  background-color: #ffffff;
+}
+.bg-surface-hover {
+  background-color: #eff0e9;
+}
+.bg-surface-muted {
+  background-color: #f0f1eb;
+}
+.border-border {
+  border-color: rgba(25, 26, 35, 0.12);
+}
+
+/* Brand actions */
+.bg-brand,
+a.bg-brand,
+button.bg-brand {
+  background-color: #b9ff66;
+  color: #191a23;
+}
+.bg-brand:hover,
+a.bg-brand:hover,
+button.bg-brand:hover {
+  background-color: #a6ed55;
+  color: #191a23;
+}
+.bg-brand-light {
+  background-color: #b9ff66;
+  color: #191a23;
+}
+.text-brand {
+  color: #547b2a;
+}
+.border-brand {
+  border-color: #628d30;
+}
+.bg-brand *,
+.bg-brand-light * {
+  color: inherit;
+}
+
+/* Cards and surfaces */
+.fm-card,
+.fm-surface-card {
+  background: #ffffff;
+  color: #191a23;
+  border-color: rgba(25, 26, 35, 0.12);
+  box-shadow: 0 2px 8px rgba(25, 26, 35, 0.025);
+}
+.fm-surface-card {
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+.fm-surface-card:hover {
+  border-color: rgba(25, 26, 35, 0.2);
+  box-shadow: 0 12px 30px rgba(25, 26, 35, 0.065);
+}
+.fm-interactive-card:hover {
+  border-color: rgba(25, 26, 35, 0.22);
+}
+.fm-row-hover {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+.fm-row-hover:hover {
+  background-color: #f0f1eb;
+}
+
+/* Sidebar and navigation */
+.fm-nav-item {
+  color: #55575e;
+  border-color: transparent;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+.fm-nav-item:hover {
+  background-color: #eff0e9;
+  color: #191a23;
+}
+.fm-nav-item.active {
+  background-color: #eff0e9;
+  color: #191a23;
+  border-color: rgba(25, 26, 35, 0.1);
+}
+.fm-nav-item.active::before {
+  background: #628d30;
+}
+
+/* Inputs and form controls */
+input,
+select,
+textarea {
+  color-scheme: light;
+  accent-color: #628d30;
+}
+input::placeholder,
+textarea::placeholder {
+  color: #85867f;
+  opacity: 1;
+}
+.fm-input {
+  background-color: #ffffff;
+  color: #191a23;
+  border-color: rgba(25, 26, 35, 0.16);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.fm-input:focus,
+.fm-input:focus-visible {
+  border-color: #628d30;
+  box-shadow: 0 0 0 3px rgba(185, 255, 102, 0.28);
+  outline: none;
+}
+.fm-input:disabled {
+  background-color: #f0f1eb;
+  color: #777970;
+  cursor: not-allowed;
+}
+input[type="file"] {
+  color: #55575e;
+}
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: #628d30;
+}
+
+/* Focus and accessibility */
+*:focus-visible {
+  outline-color: #628d30;
+}
+::selection {
+  background: rgba(185, 255, 102, 0.55);
+  color: #191a23;
+}
+
+/* Brand backgrounds and subtle status surfaces */
+.bg-brand\/5 {
+  background-color: rgba(185, 255, 102, 0.12);
+}
+.bg-brand\/8 {
+  background-color: rgba(185, 255, 102, 0.16);
+}
+.bg-brand\/10 {
+  background-color: rgba(185, 255, 102, 0.18);
+}
+.border-brand\/20,
+.border-brand\/25 {
+  border-color: rgba(98, 141, 48, 0.28);
+}
+
+/* Status colors */
+.text-green-400,
+.text-emerald-400 {
+  color: #267a4b;
+}
+.bg-green-500\/10,
+.bg-emerald-500\/10 {
+  background-color: rgba(38, 122, 75, 0.09);
+}
+.border-green-500\/20,
+.border-emerald-500\/20 {
+  border-color: rgba(38, 122, 75, 0.2);
+}
+.badge-critical {
+  border-color: rgba(194, 65, 58, 0.28);
+  background: rgba(194, 65, 58, 0.08);
+  color: #b42318;
+}
+.badge-high {
+  border-color: rgba(194, 65, 12, 0.25);
+  background: rgba(194, 65, 12, 0.08);
+  color: #b9380a;
+}
+.badge-medium {
+  border-color: rgba(148, 98, 0, 0.25);
+  background: rgba(148, 98, 0, 0.08);
+  color: #805400;
+}
+.badge-low {
+  border-color: rgba(38, 122, 75, 0.25);
+  background: rgba(38, 122, 75, 0.08);
+  color: #267a4b;
+}
+.badge-info {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.07);
+  color: #2563eb;
+}
+
+/* Code diffs */
+.diff-add {
+  background: rgba(38, 122, 75, 0.08);
+  color: #267a4b;
+}
+.diff-remove {
+  background: rgba(194, 65, 58, 0.08);
+  color: #b42318;
+}
+
+/* Verification checkbox rows */
+.fm-check-row.checked {
+  border-color: rgba(98, 141, 48, 0.35);
+  background-color: rgba(185, 255, 102, 0.14);
+}
+
+/* Loading skeletons */
+.fm-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(25, 26, 35, 0.035) 25%,
+    rgba(25, 26, 35, 0.075) 50%,
+    rgba(25, 26, 35, 0.035) 75%
+  );
+  background-size: 400px 100%;
+}
+
+/* Technical content stays dark for contrast */
+pre,
+code,
+.font-mono,
+.font-mono * {
+  font-variant-ligatures: none;
+}
+pre {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  tab-size: 2;
+}
+code {
+  overflow-wrap: anywhere;
+}
+.fm-code-panel,
+.fm-console-panel,
+.fm-terminal-panel {
+  background: #191a23;
+  color: #f7f7f2;
+  border-color: rgba(25, 26, 35, 0.2);
+}
+.fm-code-panel pre,
+.fm-console-panel pre,
+.fm-terminal-panel pre {
+  background: transparent;
+  color: inherit;
+}
+
+/* App hero backgrounds; marketing page has separate scoped styles */
+.fm-hero-backdrop {
+  background:
+    radial-gradient(
+      ellipse 65% 45% at 75% 0%,
+      rgba(185, 255, 102, 0.2),
+      transparent 72%
+    ),
+    linear-gradient(180deg, #f7f7f2 0%, #f7f7f2 100%);
+}
+.fm-hero-grid {
+  background-image:
+    linear-gradient(to right, rgba(25, 26, 35, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(25, 26, 35, 0.035) 1px, transparent 1px);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: rgba(25, 26, 35, 0.16);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(25, 26, 35, 0.28);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   ForgeMind — Shared App Typography
+   Match dashboard and app screens to the landing page's Inter.
+   Keep intentional code/log typography monospace.
+   ============================================================ */
+
+body {
+  font-family:
+    var(--font-sans),
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-kerning: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.012em;
+}
+
+/* Dashboard and application headings */
+body h1,
+body h2,
+body h3,
+body h4,
+body h5,
+body h6 {
+  font-family:
+    var(--font-sans),
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-kerning: normal;
+  text-wrap: balance;
+}
+
+body h1 {
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1.15;
+}
+
+body h2 {
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.25;
+}
+
+body h3 {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.4;
+}
+
+/* Use the shared sans face for regular application controls and copy. */
+body p,
+body label,
+body button,
+body input,
+body textarea,
+body select {
+  font-family:
+    var(--font-sans),
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+}
+
+/* Explicitly preserve monospace utilities for diagnostics and code. */
+body code,
+body pre,
+body kbd,
+body samp,
+body .font-mono,
+body .font-mono *,
+body pre *,
+body code * {
+  font-family:
+    var(--font-mono), "JetBrains Mono", "Fira Code", Consolas, monospace !important;
+  font-variant-ligatures: none;
+}
+
+/* The marketing page keeps its original typography and editorial styling. */
+.fm-marketing {
+  font-family:
+    var(--font-sans),
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+}
+
+.fm-marketing h1,
+.fm-marketing h2,
+.fm-marketing h3,
+.fm-marketing h4,
+.fm-marketing h5,
+.fm-marketing h6 {
+  font-family: inherit;
+}
+
+.fm-marketing .font-mono,
+.fm-marketing .font-mono * {
+  font-family:
+    var(--font-mono), "JetBrains Mono", "Fira Code", Consolas, monospace !important;
 }

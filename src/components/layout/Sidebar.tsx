@@ -1,14 +1,36 @@
+
 'use client';
 
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { History, SearchCode, Sliders, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import {
+  History,
+  SearchCode,
+  Sliders,
+  ShieldAlert,
+  CheckCircle2,
+} from 'lucide-react';
 
 const NAV_ITEMS = [
-  { label: 'All Investigations', href: '/investigations', icon: History, exact: true },
-  { label: 'New Diagnostic', href: '/investigations/new', icon: SearchCode, exact: false },
-  { label: 'Configuration', href: '/settings', icon: Sliders, exact: false },
+  {
+    label: 'All Investigations',
+    href: '/investigations',
+    icon: History,
+    exact: true,
+  },
+  {
+    label: 'New Diagnostic',
+    href: '/investigations/new',
+    icon: SearchCode,
+    exact: false,
+  },
+  {
+    label: 'Configuration',
+    href: '/settings',
+    icon: Sliders,
+    exact: false,
+  },
 ];
 
 const CAPABILITIES = [
@@ -23,33 +45,45 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-60 border-r border-border bg-surface shrink-0 hidden lg:flex flex-col justify-between py-5 px-3 min-h-[calc(100vh-3.5rem)]">
+    <aside className="w-60 shrink-0 flex-col justify-between border-r border-border bg-surface px-3 py-5 min-h-[calc(100vh-3.5rem)] hidden lg:flex">
       <div className="space-y-7">
         {/* Navigation */}
         <div>
-          <p className="text-[10px] font-mono uppercase tracking-widest text-foreground-muted px-3 mb-2">
+          <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground-muted">
             Workspace
           </p>
-          <nav className="space-y-0.5">
+
+          <nav className="space-y-1">
             {NAV_ITEMS.map(({ label, href, icon: Icon, exact }) => {
-              const active = exact ? pathname === href : pathname.startsWith(href);
+              const active = exact
+                ? pathname === href
+                : pathname.startsWith(href);
+
               return (
                 <Link
                   key={href}
                   href={href}
+                  aria-current={active ? 'page' : undefined}
                   className={`
-                    fm-nav-item flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-all duration-150
-                    ${active
-                      ? 'active bg-surface-elevated text-foreground border border-border font-medium'
-                      : 'text-foreground-secondary hover:text-foreground hover:bg-surface-hover'
+                    fm-nav-item flex items-center gap-2.5 rounded-md
+                    border px-3 py-2.5 text-[13px] leading-5
+                    transition-all duration-150
+                    ${
+                      active
+                        ? 'active border-border bg-surface-elevated font-semibold text-foreground'
+                        : 'border-transparent text-foreground-secondary hover:bg-surface-hover hover:text-foreground'
                     }
                   `}
                 >
                   <Icon
-                    className={`w-4 h-4 shrink-0 transition-colors duration-150 ${
-                      active ? 'text-brand' : 'text-foreground-muted'
+                    aria-hidden="true"
+                    className={`h-4 w-4 shrink-0 transition-colors duration-150 ${
+                      active
+                        ? 'text-brand'
+                        : 'text-foreground-muted'
                     }`}
                   />
+
                   <span>{label}</span>
                 </Link>
               );
@@ -58,15 +92,19 @@ export function Sidebar() {
         </div>
 
         {/* Diagnostic capabilities */}
-        <div className="px-3 py-3.5 rounded-lg border border-border bg-background/60 space-y-2.5">
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground">
-            <CheckCircle2 className="w-3.5 h-3.5 text-brand shrink-0" />
-            Unity Rules Engine
+        <div className="space-y-3 rounded-lg border border-border bg-background/60 px-3 py-3.5">
+          <div className="flex items-center gap-2 text-xs font-semibold tracking-tight text-foreground">
+            <CheckCircle2
+              aria-hidden="true"
+              className="h-3.5 w-3.5 shrink-0 text-brand"
+            />
+            <span>Unity Rules Engine</span>
           </div>
-          <ul className="space-y-1.5 text-[11px] text-foreground-secondary">
+
+          <ul className="space-y-2 text-[11px] leading-[1.6] text-foreground-secondary">
             {CAPABILITIES.map((cap) => (
-              <li key={cap} className="flex items-start gap-1.5">
-                <span className="w-1 h-1 rounded-full bg-brand/60 shrink-0 mt-1.5" />
+              <li key={cap} className="flex items-start gap-2">
+                <span className="mt-[6px] h-1 w-1 shrink-0 rounded-full bg-brand/60" />
                 <span>{cap}</span>
               </li>
             ))}
@@ -75,14 +113,18 @@ export function Sidebar() {
       </div>
 
       {/* Safety notice */}
-      <div className="px-3 py-3 rounded-lg border border-border bg-surface-muted text-[11px] text-foreground-muted space-y-1.5">
-        <div className="flex items-center gap-1.5 font-semibold text-foreground-secondary">
-          <ShieldAlert className="w-3 h-3 text-brand" />
-          Local Safe Execution
+      <div className="space-y-2 rounded-lg border border-border bg-surface-muted px-3 py-3">
+        <div className="flex items-center gap-2 text-xs font-semibold text-foreground-secondary">
+          <ShieldAlert
+            aria-hidden="true"
+            className="h-3.5 w-3.5 shrink-0 text-brand"
+          />
+          <span>Local Safe Execution</span>
         </div>
-        <p className="leading-relaxed">
-          Code and logs are processed in-memory. ForgeMind never executes uploaded scripts or
-          modifies your Unity project.
+
+        <p className="text-[11px] leading-[1.65] text-foreground-muted">
+          Code and logs are processed in-memory. ForgeMind never executes
+          uploaded scripts or modifies your Unity project.
         </p>
       </div>
     </aside>
