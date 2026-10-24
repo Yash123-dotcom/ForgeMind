@@ -3211,3 +3211,40 @@ body code * {
   font-family:
     var(--font-mono), "JetBrains Mono", "Fira Code", Consolas, monospace !important;
 }
+
+/* ============================================================
+   ForgeMind — Footer Legal Links
+   Privacy Policy and Software Licenses
+   ============================================================ */
+.fm-footer-legal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.fm-footer-legal a {
+  color: inherit;
+  text-decoration: none;
+  transition:
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+.fm-footer-legal a:hover {
+  opacity: 0.65;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.fm-footer-legal a:focus-visible {
+  outline: 2px solid #628d30;
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+@media (max-width: 760px) {
+  .fm-footer-legal {
+    gap: 1rem;
+  }
+}

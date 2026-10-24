@@ -1,3 +1,4 @@
+
 import Link from "next/link";
 import {
   ArrowDownRight,
@@ -101,11 +102,13 @@ function MarketingNav() {
     <header className="fm-site-header">
       <div className="fm-container fm-nav-inner">
         <BrandMark />
+
         <nav className="fm-nav-links" aria-label="Main navigation">
           <a href="#product">Product</a>
           <a href="#how-it-works">How it works</a>
           <a href="#safety">Safety</a>
         </nav>
+
         <Link
           href="/investigations/new"
           className="fm-button fm-button-dark fm-nav-cta"
@@ -127,9 +130,11 @@ function HeroIllustration() {
       <div className="fm-art-orbit fm-art-orbit-b" />
       <div className="fm-art-cross fm-art-cross-a">+</div>
       <div className="fm-art-cross fm-art-cross-b">+</div>
+
       <div className="fm-art-label fm-art-label-top">
         <span className="fm-label-dot" /> INVESTIGATION IN PROGRESS
       </div>
+
       <div className="fm-art-error-card">
         <div className="fm-art-card-top">
           <span className="fm-art-file-icon">
@@ -138,10 +143,14 @@ function HeroIllustration() {
           <span>Console / Error</span>
           <span className="fm-art-error-pill">ERROR</span>
         </div>
+
         <div className="fm-art-code-line">
           <span>CS</span> shader pass not supported
         </div>
-        <div className="fm-art-code-sub">Assets/Shaders/Water.shader:42</div>
+        <div className="fm-art-code-sub">
+          Assets/Shaders/Water.shader:42
+        </div>
+
         <div className="fm-art-mini-code">
           <span>42</span>
           <code>Tags {"{"} &quot;LightMode&quot; =</code>
@@ -151,11 +160,13 @@ function HeroIllustration() {
           </code>
         </div>
       </div>
+
       <div className="fm-art-trace-line">
         <span />
         <span />
         <span />
       </div>
+
       <div className="fm-art-cause-card">
         <div className="fm-art-cause-head">
           <span className="fm-art-cause-icon">
@@ -164,14 +175,18 @@ function HeroIllustration() {
           <span>LIKELY ROOT CAUSE</span>
           <span className="fm-art-match">RULE MATCH</span>
         </div>
+
         <p>Render pipeline mismatch</p>
+
         <div className="fm-art-cause-foot">
           <GitBranch size={14} /> URP shader in Built-in project
         </div>
       </div>
+
       <div className="fm-art-stamp">
         <Sparkles size={15} /> FIND THE CONNECTION
       </div>
+
       <div className="fm-art-label fm-art-label-bottom">
         EXAMPLE DIAGNOSTIC · SYNTHETIC DATA
       </div>
@@ -183,6 +198,7 @@ function Hero() {
   return (
     <section className="fm-hero">
       <div className="fm-hero-grid-bg" aria-hidden="true" />
+
       <div className="fm-container fm-hero-layout">
         <div className="fm-hero-copy">
           <div className="fm-eyebrow">
@@ -191,16 +207,19 @@ function Hero() {
             </span>{" "}
             UNITY DEBUGGING, WITH CONTEXT
           </div>
+
           <h1>
             Stop guessing.
             <br />
             <em>Start debugging.</em>
           </h1>
+
           <p className="fm-hero-description">
             Unity errors rarely tell the whole story. ForgeMind helps connect
             stack traces, code, and project context to find a clearer path to
             the cause.
           </p>
+
           <div className="fm-hero-actions">
             <Link
               href="/investigations/new"
@@ -208,10 +227,12 @@ function Hero() {
             >
               Start an investigation <ArrowRight size={17} />
             </Link>
+
             <Link href="/investigations" className="fm-text-link">
               Explore dashboard <ArrowDownRight size={17} />
             </Link>
           </div>
+
           <div className="fm-hero-note">
             <span className="fm-note-check">
               <Check size={13} />
@@ -224,8 +245,10 @@ function Hero() {
             You stay in control
           </div>
         </div>
+
         <HeroIllustration />
       </div>
+
       <div className="fm-container fm-hero-bottomline">
         <span>BUILT FOR THE REALITIES OF UNITY DEVELOPMENT</span>
         <span className="fm-bottomline-right">
@@ -284,6 +307,7 @@ function SectionHeading({
           {title} {italic && <em>{italic}</em>}
         </h2>
       </div>
+
       <p>{description}</p>
     </div>
   );
@@ -299,9 +323,11 @@ function Features() {
           italic="direction."
           description="A focused investigation workflow for the messy, interconnected problems that show up in real Unity projects."
         />
+
         <div className="fm-feature-grid">
           {features.map((feature) => {
             const Icon = feature.icon;
+
             return (
               <article
                 key={feature.number}
@@ -315,6 +341,7 @@ function Features() {
                     <Icon size={21} strokeWidth={1.8} />
                   </span>
                 </div>
+
                 <div className="fm-feature-copy">
                   <h3>{feature.title}</h3>
                   <h4>
@@ -322,6 +349,7 @@ function Features() {
                   </h4>
                   <p>{feature.description}</p>
                 </div>
+
                 <div className="fm-feature-card-bottom">
                   <span>{feature.tag}</span>
                   <span className="fm-feature-arrow">
@@ -343,41 +371,48 @@ function ProductPreview() {
       <div className="fm-container fm-product-layout">
         <div className="fm-product-copy">
           <span className="fm-section-eyebrow">INSIDE AN INVESTIGATION</span>
+
           <h2>
             From a cryptic error to a <em>clear next step.</em>
           </h2>
+
           <p>
-            Instead of a wall of generated text, review a structured report that
-            separates the observed error, likely cause, and what still needs
-            verification.
+            Instead of a wall of generated text, review a structured report
+            that separates the observed error, likely cause, and what still
+            needs verification.
           </p>
+
           <ul className="fm-product-checklist">
             <li>
-              <CheckCircle2 size={18} />{" "}
+              <CheckCircle2 size={18} />
               <span>
                 <strong>Evidence first</strong>
                 <small>See which details support a finding.</small>
               </span>
             </li>
+
             <li>
-              <CheckCircle2 size={18} />{" "}
+              <CheckCircle2 size={18} />
               <span>
                 <strong>Clear uncertainty</strong>
                 <small>Distinguish likely causes from confirmed facts.</small>
               </span>
             </li>
+
             <li>
-              <CheckCircle2 size={18} />{" "}
+              <CheckCircle2 size={18} />
               <span>
                 <strong>Practical next steps</strong>
                 <small>Know what to inspect in the Unity Editor.</small>
               </span>
             </li>
           </ul>
+
           <Link href="/investigations/new" className="fm-button fm-button-dark">
             Try an investigation <ArrowRight size={16} />
           </Link>
         </div>
+
         <div className="fm-report-window">
           <div className="fm-report-topbar">
             <div className="fm-window-controls">
@@ -390,10 +425,13 @@ function ProductPreview() {
               <span /> EXAMPLE
             </span>
           </div>
+
           <div className="fm-report-content">
             <div className="fm-report-heading">
               <div>
-                <span className="fm-report-kicker">INVESTIGATION / 0042</span>
+                <span className="fm-report-kicker">
+                  INVESTIGATION / 0042
+                </span>
                 <h3>Shader pipeline mismatch</h3>
                 <p>
                   Unity 2022.3 LTS <b>·</b> Built-in Render Pipeline
@@ -401,6 +439,7 @@ function ProductPreview() {
               </div>
               <span className="fm-report-severity">HIGH</span>
             </div>
+
             <div className="fm-report-observation">
               <span className="fm-report-label">OBSERVED ERROR</span>
               <code>LightMode = &quot;UniversalForward&quot;</code>
@@ -409,6 +448,7 @@ function ProductPreview() {
                 indicates Built-in Render Pipeline.
               </p>
             </div>
+
             <div className="fm-report-cause">
               <div className="fm-report-cause-title">
                 <CheckCircle2 size={16} /> LIKELY ROOT CAUSE{" "}
@@ -420,6 +460,7 @@ function ProductPreview() {
               </p>
               <code>UNITY-RULE-PIPELINE-MISMATCH</code>
             </div>
+
             <div className="fm-report-next">
               <div className="fm-report-next-icon">
                 <ArrowRight size={16} />
@@ -427,11 +468,12 @@ function ProductPreview() {
               <div>
                 <span className="fm-report-label">SUGGESTED NEXT STEP</span>
                 <p>
-                  Review shader tags and includes, then validate compilation and
-                  material rendering in the Editor.
+                  Review shader tags and includes, then validate compilation
+                  and material rendering in the Editor.
                 </p>
               </div>
             </div>
+
             <div className="fm-report-foot">
               <span>
                 <LockKeyhole size={13} /> Illustrative sample — not a live
@@ -456,6 +498,7 @@ function HowItWorks() {
           italic="a better lead."
           description="You bring the context. ForgeMind helps organize the investigation. You verify the result."
         />
+
         <div className="fm-process-list">
           {steps.map((step, index) => (
             <article className="fm-process-row" key={step.number}>
@@ -463,12 +506,18 @@ function HowItWorks() {
                 {step.number}
                 <span>.</span>
               </div>
+
               <div className="fm-process-title">
                 <h3>{step.title}</h3>
                 <span>
-                  {index === 0 ? "INPUT" : index === 1 ? "ANALYSIS" : "REVIEW"}
+                  {index === 0
+                    ? "INPUT"
+                    : index === 1
+                      ? "ANALYSIS"
+                      : "REVIEW"}
                 </span>
               </div>
+
               <p>{step.description}</p>
               <ChevronDown className="fm-process-chevron" size={20} />
             </article>
@@ -486,13 +535,16 @@ function SafetySection() {
         <div className="fm-safety-icon">
           <ShieldCheck size={26} />
         </div>
+
         <div className="fm-safety-copy">
           <span className="fm-section-eyebrow">
             BUILT FOR DEVELOPER CONTROL
           </span>
+
           <h2>
             Your code stays <em>your call.</em>
           </h2>
+
           <p>
             ForgeMind analyzes the information you submit and does not execute
             arbitrary code on the web host or run shell commands. Review
@@ -500,6 +552,7 @@ function SafetySection() {
             project.
           </p>
         </div>
+
         <Link href="/investigations/new" className="fm-button fm-button-lime">
           Investigate an error <ArrowRight size={16} />
         </Link>
@@ -517,6 +570,7 @@ function Footer() {
             <BrandMark />
             <p>Less guessing. More understanding.</p>
           </div>
+
           <div className="fm-footer-links">
             <a href="#product">Product</a>
             <a href="#how-it-works">How it works</a>
@@ -524,15 +578,23 @@ function Footer() {
             <Link href="/investigations">Dashboard</Link>
             <Link href="/settings">Settings</Link>
           </div>
+
           <Link href="/investigations/new" className="fm-footer-cta">
             Have an error? Let’s investigate <ArrowRight size={16} />
           </Link>
         </div>
+
         <div className="fm-footer-bottom">
           <span>
             © {new Date().getFullYear()} ForgeMind. Built for Unity developers.
           </span>
-          <span>
+
+          <div className="fm-footer-legal">
+            <Link href="/privacy">Privacy Policy</Link>
+            <Link href="/licenses">Licenses</Link>
+          </div>
+
+          <span className="fm-footer-signoff">
             DESIGNED FOR CLARITY <i /> POWERED BY CONTEXT
           </span>
         </div>
@@ -545,6 +607,7 @@ export default function LandingPage() {
   return (
     <div className="fm-marketing">
       <MarketingNav />
+
       <main>
         <Hero />
         <CapabilityStrip />
@@ -553,6 +616,7 @@ export default function LandingPage() {
         <HowItWorks />
         <SafetySection />
       </main>
+
       <Footer />
     </div>
   );
