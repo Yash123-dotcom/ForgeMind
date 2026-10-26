@@ -161,7 +161,6 @@ export const pipelineShaderRule: UnityDiagnosticRule = {
     const hasInternalErrorShader = text.includes("hidden/internalerror");
 
     const hasPinkShaderMention =
-      hasInternalErrorShader ||
       /(?:\b(?:shader|material|render pipeline|rendering)\b.{0,80}\b(?:pink|magenta)\b|\b(?:pink|magenta)\b.{0,80}\b(?:shader|material|render pipeline|rendering)\b)/i.test(
         text,
       );
@@ -274,11 +273,7 @@ export const packageManifestRule: UnityDiagnosticRule = {
     ];
 
     const relevantPackage = packageSignatures.find(
-      (signature) =>
-        signature.pattern.test(error) ||
-        Boolean(
-          ctx.codeSnippet && signature.pattern.test(ctx.codeSnippet),
-        ),
+      (signature) => signature.pattern.test(error),
     );
 
     if (!relevantPackage) return null;
@@ -295,10 +290,12 @@ export const packageManifestRule: UnityDiagnosticRule = {
         return null;
       }
 
-      if (Object.prototype.hasOwnProperty.call(
-        dependencies,
-        relevantPackage.name,
-      )) {
+      if (
+        Object.prototype.hasOwnProperty.call(
+          dependencies,
+          relevantPackage.name,
+        )
+      ) {
         return null;
       }
 
@@ -309,7 +306,7 @@ export const packageManifestRule: UnityDiagnosticRule = {
           `The uploaded manifest.json does not list '${relevantPackage.name}' (${relevantPackage.label}). This may explain the unresolved type or error, but the absent entry alone does not prove that the package is required or unavailable.`,
         evidence:
           `Inspected manifest.json: '${relevantPackage.name}' is absent from its dependencies dictionary.`,
-        severity: "high",
+        severity: "medium",
         suggestedNextStep:
           `Open Window > Package Manager and check whether '${relevantPackage.label}' (${relevantPackage.name}) is installed and resolved. If the error and project configuration confirm that the package is required and missing, install a compatible version through Package Manager. Do not guess a package version.`,
         limitations:
@@ -354,54 +351,105 @@ export const cs0103Rule: UnityDiagnosticRule = {
 
 // 6. MonoBehaviour class and C# filename agreement.
 
+/**
+ * Mask comments and literals without changing newlines.
+ * This reduces false matches from examples inside comments and strings.
+ *
+ * This is a lightweight lexer, not a full C# parser.
+ */
+function maskCSharpCommentsAndStrings(source: string): string {
+  const ignoredRegions =
+    /\/\*[\s\S]*?\*\/|\/\/[^\r\n]*|@?"(?:""|[^"])*"|'(?:\\.|[^'\\])*'/g;
+
+  return source.replace(ignoredRegions, (match) =>
+    match.replace(/[^\r\n]/g, " "),
+  );
+}
+
+/**
+ * Find declarations whose direct base class is MonoBehaviour.
+ * Returns distinct class names found in the supplied source.
+ */
+function findMonoBehaviourClasses(source: string): string[] {
+  const code = maskCSharpCommentsAndStrings(source);
+
+  const classPattern =
+    /\bclass\s+([A-Za-z_][A-Za-z0-9_]*)\s*(<[^>{};]*>)?\s*:\s*([^{};]+?)\s*\{/g;
+
+  const classNames = new Set<string>();
+  let match: RegExpExecArray | null;
+
+  while ((match = classPattern.exec(code)) !== null) {
+    const className = match[1];
+    const genericParameters = match[2];
+    const baseClause = match[3];
+
+    // Generic MonoBehaviour classes are not ordinary attachable scripts.
+    if (genericParameters) continue;
+
+    // The first base type follows the colon; interfaces may follow it.
+    const firstBaseType = baseClause.split(",")[0].trim();
+
+    const isMonoBehaviour =
+      /^(?:(?:global::)?UnityEngine\.)?MonoBehaviour$/.test(
+        firstBaseType.replace(/\s+/g, ""),
+      ) ||
+      /^(?:global::)?MonoBehaviour$/.test(
+        firstBaseType.replace(/\s+/g, ""),
+      );
+
+    if (isMonoBehaviour) {
+      classNames.add(className);
+    }
+  }
+
+  return [...classNames];
+}
+
 export const monobehaviourNameRule: UnityDiagnosticRule = {
   id: "UNITY-RULE-MONOBEHAVIOUR-NAME",
   name: "MonoBehaviour Class & Filename Agreement",
 
   evaluate: (ctx) => {
+    // A code snippet has no reliable filename, so it cannot establish
+    // a filename/class-name mismatch by itself.
     const codeFiles = (ctx.attachedFiles ?? []).filter((file) =>
       file.name.toLowerCase().endsWith(".cs"),
     );
 
-    const codeSources = [
-      ...(ctx.codeSnippet
-        ? [
-            {
-              name: undefined as string | undefined,
-              content: ctx.codeSnippet,
-            },
-          ]
-        : []),
-      ...codeFiles.map((file) => ({
-        name: file.name.replace(/\\/g, "/").split("/").pop(),
-        content: file.content,
-      })),
-    ];
+    for (const file of codeFiles) {
+      const normalizedPath = file.name.replace(/\\/g, "/");
+      const fileName = normalizedPath.split("/").pop();
 
-    for (const source of codeSources) {
-      const classMatch = source.content.match(
-        /\bclass\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?:[\w.]+\.)?MonoBehaviour\b/,
-      );
+      if (!fileName) continue;
 
-      if (!classMatch || !source.name) continue;
+      const fileBaseName = fileName.replace(/\.cs$/i, "");
+      const classNames = findMonoBehaviourClasses(file.content);
 
-      const className = classMatch[1];
-      const fileBaseName = source.name.replace(/\.cs$/i, "");
+      if (classNames.length === 0) continue;
 
-      if (fileBaseName === className) continue;
+      // If a matching class exists in the file, there is no mismatch
+      // according to this rule.
+      if (classNames.includes(fileBaseName)) continue;
+
+      // Several non-matching candidates make the diagnosis ambiguous.
+      // Do not guess which class Unity intends to attach.
+      if (classNames.length !== 1) continue;
+
+      const className = classNames[0];
 
       return {
         ruleId: "UNITY-RULE-MONOBEHAVIOUR-NAME",
-        title: `Possible Script Filename Mismatch: ${source.name} vs ${className}`,
+        title: `Possible Script Filename Mismatch: ${fileName} vs ${className}`,
         finding:
-          `The supplied file is named '${source.name}', while the detected MonoBehaviour declaration is '${className}'. Unity's attachable MonoBehaviour scripts generally require the script filename and class name to match. This check only evaluates the provided source and may not account for multiple classes or more complex declarations.`,
+          `The supplied file is named '${fileName}', but the detected MonoBehaviour declaration is '${className}'. Unity commonly expects an attachable MonoBehaviour script's filename and class name to match. This source-text check found one candidate class, but it does not verify Unity's actual script-import state.`,
         evidence:
-          `File name: '${source.name}', class declaration: '${className}'`,
-        severity: "high",
+          `File name: '${fileName}', detected MonoBehaviour class: '${className}'`,
+        severity: "medium",
         suggestedNextStep:
-          `Check whether '${className}' is the intended attachable MonoBehaviour in '${source.name}'. If it is, align the filename and class name, then allow Unity to recompile. If the file intentionally contains multiple classes, inspect the complete script before renaming anything.`,
+          `Inspect '${fileName}' and confirm whether '${className}' is the intended attachable MonoBehaviour. If so, consider aligning the filename and class name. Before renaming, check references, other declarations, and Unity's Console for the actual import error.`,
         limitations:
-          "This is a source-text heuristic. It does not parse the complete C# syntax tree or account for every valid class/file arrangement. Only supplied snippets and attached C# files are inspected.",
+          "This is a source-text heuristic, not a complete C# syntax-tree or Unity import analysis. It may not understand every valid declaration, preprocessor branch, partial class, abstract class, or Unity script-import arrangement. Ambiguous multiple-class cases are intentionally skipped.",
       };
     }
 

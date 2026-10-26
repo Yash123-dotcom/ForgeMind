@@ -42,7 +42,10 @@ describe("ForgeMind real-world Unity diagnostic evaluation", () => {
 
       assert.ok(finding);
       assert.match(finding.finding, /EnemyConfig/);
-      assert.match(finding.suggestedNextStep, /namespace|Assembly Definition|assembly/i);
+      assert.match(
+        finding.suggestedNextStep,
+        /namespace|Assembly Definition|assembly/i,
+      );
     });
 
     it("does not trigger for an unrelated compiler error", () => {
@@ -132,7 +135,10 @@ describe("ForgeMind real-world Unity diagnostic evaluation", () => {
 
       assert.ok(finding);
       assert.equal(finding.ruleId, "UNITY-RULE-PIPELINE-MISMATCH");
-      assert.match(finding.title, /Shader incompatible with Scriptable Render Pipeline \(URP\)/);
+      assert.match(
+        finding.title,
+        /Shader incompatible with Scriptable Render Pipeline \(URP\)/,
+      );
     });
 
     it("flags URP-specific shader code in a Built-in project", () => {
@@ -145,7 +151,10 @@ describe("ForgeMind real-world Unity diagnostic evaluation", () => {
       });
 
       assert.ok(finding);
-      assert.match(finding.title, /URP Shader used in Built-in Render Pipeline project/);
+      assert.match(
+        finding.title,
+        /URP Shader used in Built-in Render Pipeline project/,
+      );
     });
 
     it("does not infer a shader issue from an unrelated pink UI element", () => {
@@ -193,7 +202,11 @@ describe("ForgeMind real-world Unity diagnostic evaluation", () => {
       assert.ok(finding);
       assert.equal(finding.ruleId, "UNITY-RULE-MANIFEST-DEPS");
       assert.match(finding.finding, /com\.unity\.inputsystem/);
-      assert.match(finding.limitations, /cannot confirm Unity's resolved package state/i);
+      assert.match(
+        finding.limitations,
+        /cannot confirm Unity's resolved package state/i,
+      );
+      assert.equal(finding.severity, "medium");
     });
 
     it("does not report a missing package when the manifest includes it", () => {
@@ -252,6 +265,25 @@ describe("ForgeMind real-world Unity diagnostic evaluation", () => {
 
       assert.equal(finding, null);
     });
+
+    it("does not blame Input System for an unrelated missing type", () => {
+      const finding = packageManifestRule.evaluate({
+        ...baseContext,
+        errorMessage:
+          "error CS0246: The type or namespace name 'EnemyConfig' could not be found",
+        codeSnippet: "private InputAction moveAction;",
+        attachedFiles: [
+          {
+            name: "manifest.json",
+            size: 100,
+            type: "application/json",
+            content: JSON.stringify({ dependencies: {} }),
+          },
+        ],
+      });
+
+      assert.equal(finding, null);
+    });
   });
 
   describe("MonoBehaviour class and filename agreement", () => {
@@ -259,7 +291,6 @@ describe("ForgeMind real-world Unity diagnostic evaluation", () => {
       const finding = monobehaviourNameRule.evaluate({
         ...baseContext,
         errorMessage: "The script class cannot be found in EnemyAI.cs",
-        codeSnippet: "public class MonsterBoss : MonoBehaviour { }",
         attachedFiles: [
           {
             name: "EnemyAI.cs",
@@ -274,12 +305,12 @@ describe("ForgeMind real-world Unity diagnostic evaluation", () => {
       assert.equal(finding.ruleId, "UNITY-RULE-MONOBEHAVIOUR-NAME");
       assert.match(finding.title, /EnemyAI\.cs/);
       assert.match(finding.title, /MonsterBoss/);
+      assert.equal(finding.severity, "medium");
     });
 
     it("does not flag matching MonoBehaviour class and filename", () => {
       const finding = monobehaviourNameRule.evaluate({
         ...baseContext,
-        codeSnippet: "public class EnemyAI : MonoBehaviour { }",
         attachedFiles: [
           {
             name: "EnemyAI.cs",
@@ -297,6 +328,108 @@ describe("ForgeMind real-world Unity diagnostic evaluation", () => {
       const finding = monobehaviourNameRule.evaluate({
         ...baseContext,
         codeSnippet: "public class EnemyAI : MonoBehaviour { }",
+      });
+
+      assert.equal(finding, null);
+    });
+
+    it("does not flag a mismatch when a later class matches the filename", () => {
+      const finding = monobehaviourNameRule.evaluate({
+        ...baseContext,
+        attachedFiles: [
+          {
+            name: "EnemyAI.cs",
+            size: 300,
+            type: "text/x-csharp",
+            content: `
+              public class HelperBehaviour : MonoBehaviour { }
+              public class EnemyAI : UnityEngine.MonoBehaviour { }
+            `,
+          },
+        ],
+      });
+
+      assert.equal(finding, null);
+    });
+
+    it("ignores class-like declarations inside comments and strings", () => {
+      const finding = monobehaviourNameRule.evaluate({
+        ...baseContext,
+        attachedFiles: [
+          {
+            name: "EnemyAI.cs",
+            size: 300,
+            type: "text/x-csharp",
+            content: `
+              // public class FakeEnemy : MonoBehaviour { }
+              public class EnemyAI : MonoBehaviour
+              {
+                private string example =
+                  "public class FakeBoss : MonoBehaviour { }";
+              }
+            `,
+          },
+        ],
+      });
+
+      assert.equal(finding, null);
+    });
+
+    it("supports a namespace-qualified MonoBehaviour base class", () => {
+      const finding = monobehaviourNameRule.evaluate({
+        ...baseContext,
+        attachedFiles: [
+          {
+            name: "MonsterBoss.cs",
+            size: 200,
+            type: "text/x-csharp",
+            content:
+              "public class DifferentName : UnityEngine.MonoBehaviour { }",
+          },
+        ],
+      });
+
+      assert.ok(finding);
+      assert.match(finding.title, /MonsterBoss\.cs/);
+      assert.match(finding.title, /DifferentName/);
+      assert.equal(finding.severity, "medium");
+    });
+
+    it("skips ambiguous files with multiple non-matching MonoBehaviour classes", () => {
+      const finding = monobehaviourNameRule.evaluate({
+        ...baseContext,
+        attachedFiles: [
+          {
+            name: "Gameplay.cs",
+            size: 300,
+            type: "text/x-csharp",
+            content: `
+              public class EnemyBehaviour : MonoBehaviour { }
+              public class PlayerBehaviour : MonoBehaviour { }
+            `,
+          },
+        ],
+      });
+
+      assert.equal(finding, null);
+    });
+
+    it("does not flag a file with no MonoBehaviour declaration", () => {
+      const finding = monobehaviourNameRule.evaluate({
+        ...baseContext,
+        attachedFiles: [
+          {
+            name: "EnemyConfig.cs",
+            size: 200,
+            type: "text/x-csharp",
+            content: `
+              public class EnemyConfig
+              {
+                public int health;
+              }
+            `,
+          },
+        ],
       });
 
       assert.equal(finding, null);
