@@ -403,7 +403,7 @@ function findMonoBehaviourClasses(source: string): string[] {
     }
   }
 
-  return [...classNames];
+  return Array.from(classNames);
 }
 
 export const monobehaviourNameRule: UnityDiagnosticRule = {
