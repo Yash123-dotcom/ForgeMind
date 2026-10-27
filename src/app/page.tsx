@@ -1,5 +1,6 @@
 
 import Link from "next/link";
+import { Logo } from "@/components/brand/Logo";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -85,14 +86,7 @@ const steps = [
 function BrandMark() {
   return (
     <Link href="/" className="fm-brand" aria-label="ForgeMind home">
-      <span className="fm-brand-symbol" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </span>
-      <span>
-        Forge<span className="fm-brand-light">Mind</span>
-      </span>
+      <Logo size="md" theme="light" />
     </Link>
   );
 }

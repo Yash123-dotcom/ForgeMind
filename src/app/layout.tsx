@@ -23,7 +23,11 @@ export const metadata: Metadata = {
     'AI-powered diagnostics for Unity developers. Investigate errors with project-aware debugging, deterministic rules, and evidence-backed reports.',
   applicationName: 'ForgeMind',
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'

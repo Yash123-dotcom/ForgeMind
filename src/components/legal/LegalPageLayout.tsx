@@ -1,7 +1,8 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { ArrowLeft, ArrowUpRight, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight } from 'lucide-react';
+import { Logo } from '@/components/brand/Logo';
 
 type LegalPageLayoutProps = {
   eyebrow: string;
@@ -25,14 +26,9 @@ export function LegalPageLayout({
           <Link
             href="/"
             aria-label="ForgeMind home"
-            className="flex items-center gap-3"
+            className="flex items-center gap-3 transition-opacity duration-150 hover:opacity-80"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#171914] text-[#b9ff66]">
-              <ShieldCheck size={19} />
-            </span>
-            <span className="text-lg font-semibold tracking-[-0.05em]">
-              Forge<span className="font-normal">Mind</span>
-            </span>
+            <Logo size="md" theme="light" />
           </Link>
 
           <Link
