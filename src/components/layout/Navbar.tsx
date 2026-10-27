@@ -36,7 +36,7 @@ export function Navbar() {
           aria-label="ForgeMind home"
           className="shrink-0 transition-opacity duration-150 hover:opacity-80"
         >
-          <Logo size="md" />
+          <Logo size="md" theme="light" />
         </Link>
 
         {/* Desktop navigation */}
