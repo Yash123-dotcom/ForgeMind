@@ -10,6 +10,7 @@
     "test": "tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.39.8",
     "@neondatabase/serverless": "^1.2.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
