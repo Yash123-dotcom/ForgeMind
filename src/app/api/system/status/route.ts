@@ -6,6 +6,7 @@ import {
   isNeonConfigured,
 } from '@/lib/db';
 import { allRules } from '@/lib/diagnostic-engine/rules';
+import { requireUserId } from '@/lib/auth';
 import { blockUnauthenticatedProductionApi } from '@/lib/security/public-launch-guard';
 
 export const dynamic = 'force-dynamic';
@@ -15,11 +16,16 @@ export async function GET() {
   const blocked = blockUnauthenticatedProductionApi();
   if (blocked) return blocked;
 
+  const authResult = await requireUserId();
+  if (authResult.response) return authResult.response;
+
   try {
     const aiConfig = getAiConfig();
     const aiReady = isAiConfigured();
 
-    const investigationsCount = await getInvestigationCount();
+    const investigationsCount = await getInvestigationCount(
+      authResult.userId
+    );
 
     return NextResponse.json(
       {

@@ -3,22 +3,54 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getInvestigationById } from '@/lib/db';
 import { getAiConfig, isAiConfigured } from '@/lib/ai/provider';
+import { requireUserId } from '@/lib/auth';
 import { blockUnauthenticatedProductionApi } from '@/lib/security/public-launch-guard';
+import {
+  checkRateLimit,
+  RateLimitUnavailableError,
+} from '@/lib/security/rate-limit';
+import {
+  readLimitedJson,
+  RequestBodyTooLargeError,
+  InvalidJsonBodyError,
+} from '@/lib/security/read-limited-json';
 
 export const dynamic = 'force-dynamic';
+
+const InvestigationIdSchema = z.string().uuid();
+
+const HistoryMessageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string().trim().min(1).max(3000),
+}).strict();
 
 const FollowUpSchema = z.object({
   message: z.string().trim().min(2).max(3000),
   history: z
-    .array(
-      z.object({
-        role: z.enum(['user', 'assistant']),
-        content: z.string().min(1).max(3000),
-      })
-    )
+    .array(HistoryMessageSchema)
     .max(10)
-    .optional(),
-});
+    .optional()
+    .refine(
+      (history) =>
+        !history ||
+        history.every((item, index) => {
+          const expectedRole = index % 2 === 0 ? 'user' : 'assistant';
+          return item.role === expectedRole;
+        }),
+      {
+        message: 'Conversation history must alternate between user and assistant.',
+      }
+    )
+    .refine(
+      (history) =>
+        !history ||
+        history.length === 0 ||
+        history[history.length - 1].role === 'assistant',
+      {
+        message: 'Conversation history must end with an assistant message.',
+      }
+    ),
+}).strict();
 
 const SYSTEM_PROMPT = `You are ForgeMind, a conversational Unity debugging assistant.
 
@@ -45,14 +77,64 @@ export async function POST(
   const blocked = blockUnauthenticatedProductionApi();
   if (blocked) return blocked;
 
+  const authResult = await requireUserId();
+  if (authResult.response) return authResult.response;
+
   try {
-    const body: unknown = await req.json();
+    const rateLimit = await checkRateLimit(
+      authResult.userId,
+      'follow-up'
+    );
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Follow-up limit reached. Try again later.',
+          limit: rateLimit.limit,
+          remaining: rateLimit.remaining,
+          reset: rateLimit.reset,
+        },
+        {
+          status: 429,
+          headers: {
+            'Cache-Control': 'no-store',
+            'Retry-After': String(
+              Math.max(
+                1,
+                Math.ceil((rateLimit.reset - Date.now()) / 1000)
+              )
+            ),
+          },
+        }
+      );
+    }
+
+    const idResult = InvestigationIdSchema.safeParse(params.id);
+
+    if (!idResult.success) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid investigation ID.' },
+        {
+          status: 400,
+          headers: { 'Cache-Control': 'no-store' },
+        }
+      );
+    }
+
+    const body: unknown = await readLimitedJson(req);
     const parsed = FollowUpSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: 'Enter a message of up to 3000 characters.' },
-        { status: 400 }
+        {
+          success: false,
+          error: 'Invalid message or conversation history.',
+        },
+        {
+          status: 400,
+          headers: { 'Cache-Control': 'no-store' },
+        }
       );
     }
 
@@ -62,16 +144,25 @@ export async function POST(
           success: false,
           error: 'AI is not configured. Check your AI provider settings.',
         },
-        { status: 503 }
+        {
+          status: 503,
+          headers: { 'Cache-Control': 'no-store' },
+        }
       );
     }
 
-    const investigation = await getInvestigationById(params.id);
+    const investigation = await getInvestigationById(
+      idResult.data,
+      authResult.userId
+    );
 
     if (!investigation) {
       return NextResponse.json(
         { success: false, error: 'Investigation not found.' },
-        { status: 404 }
+        {
+          status: 404,
+          headers: { 'Cache-Control': 'no-store' },
+        }
       );
     }
 
@@ -143,7 +234,10 @@ export async function POST(
 
         return NextResponse.json(
           { success: false, error: 'The AI provider could not answer. Try again.' },
-          { status: 502 }
+          {
+            status: 502,
+            headers: { 'Cache-Control': 'no-store' },
+          }
         );
       }
 
@@ -153,22 +247,66 @@ export async function POST(
       if (typeof reply !== 'string' || !reply.trim()) {
         return NextResponse.json(
           { success: false, error: 'The AI provider returned an empty reply.' },
-          { status: 502 }
+          {
+            status: 502,
+            headers: { 'Cache-Control': 'no-store' },
+          }
         );
       }
 
-      return NextResponse.json({
-        success: true,
-        reply: reply.trim(),
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          reply: reply.trim(),
+        },
+        {
+          headers: { 'Cache-Control': 'no-store' },
+        }
+      );
     } finally {
       clearTimeout(timeoutId);
     }
   } catch (error) {
+    if (error instanceof RateLimitUnavailableError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Service temporarily unavailable. Please try again later.',
+        },
+        {
+          status: 503,
+          headers: { 'Cache-Control': 'no-store' },
+        }
+      );
+    }
+
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json(
+        { success: false, error: 'Request body exceeds the 4 MB limit.' },
+        {
+          status: 413,
+          headers: { 'Cache-Control': 'no-store' },
+        }
+      );
+    }
+
+    if (error instanceof InvalidJsonBodyError) {
+      return NextResponse.json(
+        { success: false, error: 'Request body must contain valid JSON.' },
+        {
+          status: 400,
+          headers: { 'Cache-Control': 'no-store' },
+        }
+      );
+    }
+
     if (error instanceof Error && error.name === 'AbortError') {
       return NextResponse.json(
         { success: false, error: 'The AI request timed out. Try again.' },
-        { status: 504 }
+        {
+          status: 504,
+          headers: { 'Cache-Control': 'no-store' },
+        }
       );
     }
 
@@ -176,7 +314,10 @@ export async function POST(
 
     return NextResponse.json(
       { success: false, error: 'Failed to process the follow-up message.' },
-      { status: 500 }
+      {
+        status: 500,
+        headers: { 'Cache-Control': 'no-store' },
+      }
     );
   }
 }

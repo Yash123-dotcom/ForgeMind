@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import { Menu, Plus, X } from 'lucide-react';
 import { Logo } from '../brand/Logo';
 
@@ -40,70 +41,11 @@ export function Navbar() {
         </Link>
 
         {/* Desktop navigation */}
-        <nav
-          aria-label="Main navigation"
-          className="hidden items-center gap-1 md:flex"
-        >
-          {navLinks.map(({ href, label }) => {
-            const active = isActive(href);
-
-            return (
-              <Link
-                key={href}
-                href={href}
-                aria-current={active ? 'page' : undefined}
-                className={`relative rounded-md border px-3 py-2 text-sm font-medium transition-colors duration-150 ${
-                  active
-                    ? 'border-border bg-surface-elevated text-foreground'
-                    : 'border-transparent text-foreground-secondary hover:bg-surface-hover hover:text-foreground'
-                }`}
-              >
-                {label}
-                {active && (
-                  <span className="absolute bottom-0 left-1/2 h-0.5 w-4 -translate-x-1/2 rounded-full bg-brand" />
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Primary action and mobile menu */}
-        <div className="flex shrink-0 items-center gap-2">
-          <Link
-            href="/investigations/new"
-            onClick={closeMobileMenu}
-            className="group inline-flex items-center justify-center gap-1.5 rounded-md bg-brand px-3 py-2.5 text-xs font-semibold text-background shadow-sm shadow-brand/15 transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-light active:translate-y-0 sm:px-4 sm:text-sm"
+        <SignedIn>
+          <nav
+            aria-label="Main navigation"
+            className="hidden items-center gap-1 md:flex"
           >
-            <Plus className="h-4 w-4 shrink-0 transition-transform duration-150 group-hover:rotate-90" />
-            <span className="sm:hidden">New</span>
-            <span className="hidden sm:inline">New diagnostic</span>
-          </Link>
-
-          <button
-            type="button"
-            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-            aria-expanded={mobileMenuOpen}
-            aria-controls="mobile-navigation"
-            onClick={() => setMobileMenuOpen((open) => !open)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground md:hidden"
-          >
-            {mobileMenuOpen ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Menu className="h-5 w-5" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile navigation */}
-      {mobileMenuOpen && (
-        <nav
-          id="mobile-navigation"
-          aria-label="Mobile navigation"
-          className="border-t border-border bg-background px-4 py-3 sm:px-6 md:hidden"
-        >
-          <div className="mx-auto flex max-w-7xl flex-col gap-1">
             {navLinks.map(({ href, label }) => {
               const active = isActive(href);
 
@@ -111,21 +53,111 @@ export function Navbar() {
                 <Link
                   key={href}
                   href={href}
-                  onClick={closeMobileMenu}
                   aria-current={active ? 'page' : undefined}
-                  className={`rounded-md px-3 py-3 text-sm font-medium transition-colors ${
+                  className={`relative rounded-md border px-3 py-2 text-sm font-medium transition-colors duration-150 ${
                     active
-                      ? 'bg-surface-elevated text-foreground'
-                      : 'text-foreground-secondary hover:bg-surface-hover hover:text-foreground'
+                      ? 'border-border bg-surface-elevated text-foreground'
+                      : 'border-transparent text-foreground-secondary hover:bg-surface-hover hover:text-foreground'
                   }`}
                 >
                   {label}
+                  {active && (
+                    <span className="absolute bottom-0 left-1/2 h-0.5 w-4 -translate-x-1/2 rounded-full bg-brand" />
+                  )}
                 </Link>
               );
             })}
-          </div>
-        </nav>
-      )}
+          </nav>
+        </SignedIn>
+
+        {/* Primary actions */}
+        <div className="flex shrink-0 items-center gap-3">
+          <SignedOut>
+            <Link
+              href="/sign-in"
+              className="rounded-md px-3 py-2 text-sm font-medium text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground"
+            >
+              Sign in
+            </Link>
+
+            <Link
+              href="/sign-up"
+              className="rounded-md bg-brand px-3 py-2.5 text-xs font-semibold text-background transition-colors hover:bg-brand-light sm:px-4 sm:text-sm"
+            >
+              Get started
+            </Link>
+          </SignedOut>
+
+          <SignedIn>
+            <Link
+              href="/investigations/new"
+              onClick={closeMobileMenu}
+              className="group inline-flex items-center justify-center gap-1.5 rounded-md bg-brand px-3 py-2.5 text-xs font-semibold text-background shadow-sm shadow-brand/15 transition-all duration-150 hover:-translate-y-0.5 hover:bg-brand-light active:translate-y-0 sm:px-4 sm:text-sm"
+            >
+              <Plus className="h-4 w-4 shrink-0 transition-transform duration-150 group-hover:rotate-90" />
+              <span className="sm:hidden">New</span>
+              <span className="hidden sm:inline">New diagnostic</span>
+            </Link>
+
+            <UserButton />
+          </SignedIn>
+
+          {/* Mobile menu toggle */}
+          <SignedIn>
+            <button
+              type="button"
+              aria-label={
+                mobileMenuOpen
+                  ? 'Close navigation menu'
+                  : 'Open navigation menu'
+              }
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-navigation"
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border text-foreground-secondary transition-colors hover:bg-surface-hover hover:text-foreground md:hidden"
+            >
+              {mobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </button>
+          </SignedIn>
+        </div>
+      </div>
+
+      {/* Mobile navigation */}
+      <SignedIn>
+        {mobileMenuOpen && (
+          <nav
+            id="mobile-navigation"
+            aria-label="Mobile navigation"
+            className="border-t border-border bg-background px-4 py-3 sm:px-6 md:hidden"
+          >
+            <div className="mx-auto flex max-w-7xl flex-col gap-1">
+              {navLinks.map(({ href, label }) => {
+                const active = isActive(href);
+
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={closeMobileMenu}
+                    aria-current={active ? 'page' : undefined}
+                    className={`rounded-md px-3 py-3 text-sm font-medium transition-colors ${
+                      active
+                        ? 'bg-surface-elevated text-foreground'
+                        : 'text-foreground-secondary hover:bg-surface-hover hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+        )}
+      </SignedIn>
     </header>
   );
 }

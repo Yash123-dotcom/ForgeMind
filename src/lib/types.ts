@@ -1,3 +1,4 @@
+
 export type UnityRenderPipeline = 'builtin' | 'urp' | 'hdrp' | 'unknown';
 
 export type UnityVersion =
@@ -84,6 +85,7 @@ export interface UploadedFileContext {
 
 export interface Investigation {
   id: string;
+  userId: string;
   title: string;
   errorMessage: string;
   codeSnippet?: string;
@@ -117,4 +119,3 @@ export interface InvestigationCreateInput {
   targetPlatform?: TargetPlatform;
   attachedFiles?: UploadedFileContext[];
 }
-
