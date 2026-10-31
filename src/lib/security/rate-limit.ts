@@ -8,13 +8,22 @@ export class RateLimitUnavailableError extends Error {
   }
 }
 
-const url = process.env.UPSTASH_REDIS_REST_URL;
-const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+const rawUrl =
+  process.env.UPSTASH_REDIS_REST_URL || process.env.UPSTASH_KV_REST_API_URL;
+const rawToken =
+  process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_KV_REST_API_TOKEN;
 
-const redis =
-  url && token
-    ? new Redis({ url, token })
-    : null;
+const url =
+  typeof rawUrl === 'string' && rawUrl.startsWith('https://')
+    ? rawUrl
+    : undefined;
+
+const token =
+  typeof rawToken === 'string' && rawToken.length > 0 && !rawToken.startsWith('${')
+    ? rawToken
+    : undefined;
+
+const redis = url && token ? new Redis({ url, token }) : null;
 
 const investigationLimiter = redis
   ? new Ratelimit({
