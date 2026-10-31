@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { neon } from '@neondatabase/serverless';
@@ -13,6 +12,7 @@ interface DatabaseShape {
 
 interface DbRow {
   id: string;
+  user_id: string | null;
   title: string;
   error_message: string;
   code_snippet: string | null;
@@ -27,8 +27,6 @@ interface DbRow {
   user_feedback: unknown;
   report_row?: unknown;
 }
-
-type JsonValue = Record<string, unknown> | unknown[] | string | null;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -173,6 +171,10 @@ function mapReport(value: unknown): DiagnosticReport | undefined {
 }
 
 function mapInvestigation(row: DbRow): Investigation {
+  if (!row.user_id) {
+    throw new Error('Cannot map an investigation without an owner');
+  }
+
   const feedback = parseJson(row.user_feedback);
 
   const userFeedback = isRecord(feedback)
@@ -187,6 +189,7 @@ function mapInvestigation(row: DbRow): Investigation {
 
   return {
     id: String(row.id),
+    userId: row.user_id,
     title: String(row.title ?? ''),
     errorMessage: String(row.error_message ?? ''),
     ...(row.code_snippet != null
@@ -232,12 +235,13 @@ function mapInvestigation(row: DbRow): Investigation {
 }
 
 /**
- * Returns the total number of investigations.
- * Uses a direct PostgreSQL count when Neon is configured.
+ * Returns the count of investigations belonging to one user.
  */
-export async function getInvestigationCount(): Promise<number> {
+export async function getInvestigationCount(
+  userId: string
+): Promise<number> {
   if (!isNeonConfigured()) {
-    return (await getAllInvestigations()).length;
+    return (await getAllInvestigations(userId)).length;
   }
 
   const sql = getSql();
@@ -245,20 +249,28 @@ export async function getInvestigationCount(): Promise<number> {
   const result = (await sql`
     SELECT COUNT(*)::int AS count
     FROM public.investigations
+    WHERE user_id = ${userId}
   `) as { count: number }[];
 
   return Number(result[0]?.count ?? 0);
 }
 
-export async function getAllInvestigations(): Promise<Investigation[]> {
+/**
+ * Returns only investigations belonging to the specified user.
+ */
+export async function getAllInvestigations(
+  userId: string
+): Promise<Investigation[]> {
   if (!isNeonConfigured()) {
     const db = initLocalDb();
 
-    return Object.values(db.investigations).sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() -
-        new Date(a.createdAt).getTime()
-    );
+    return Object.values(db.investigations)
+      .filter((investigation) => investigation.userId === userId)
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() -
+          new Date(a.createdAt).getTime()
+      );
   }
 
   const sql = getSql();
@@ -270,18 +282,29 @@ export async function getAllInvestigations(): Promise<Investigation[]> {
     FROM public.investigations AS i
     LEFT JOIN public.diagnostic_reports AS dr
       ON dr.investigation_id = i.id
+    WHERE i.user_id = ${userId}
     ORDER BY i.created_at DESC
   `) as DbRow[];
 
   return rows.map(mapInvestigation);
 }
 
+/**
+ * Fetches an investigation only when it belongs to the specified user.
+ */
 export async function getInvestigationById(
-  id: string
+  id: string,
+  userId: string
 ): Promise<Investigation | null> {
   if (!isNeonConfigured()) {
     const db = initLocalDb();
-    return db.investigations[id] ?? null;
+    const investigation = db.investigations[id];
+
+    if (!investigation || investigation.userId !== userId) {
+      return null;
+    }
+
+    return investigation;
   }
 
   const sql = getSql();
@@ -294,15 +317,24 @@ export async function getInvestigationById(
     LEFT JOIN public.diagnostic_reports AS dr
       ON dr.investigation_id = i.id
     WHERE i.id = ${id}::uuid
+      AND i.user_id = ${userId}
     LIMIT 1
   `) as DbRow[];
 
   return rows.length > 0 ? mapInvestigation(rows[0]) : null;
 }
 
+/**
+ * Saves an investigation without allowing ownership to be transferred
+ * through an ID conflict.
+ */
 export async function saveInvestigation(
   investigation: Investigation
 ): Promise<Investigation> {
+  if (!investigation.userId) {
+    throw new Error('Investigation owner is required');
+  }
+
   const now = new Date().toISOString();
 
   const saved: Investigation = {
@@ -312,6 +344,12 @@ export async function saveInvestigation(
 
   if (!isNeonConfigured()) {
     const db = initLocalDb();
+    const existing = db.investigations[saved.id];
+
+    if (existing && existing.userId !== saved.userId) {
+      throw new Error('Investigation ownership conflict');
+    }
+
     db.investigations[saved.id] = saved;
     saveLocalDb(db);
 
@@ -320,9 +358,10 @@ export async function saveInvestigation(
 
   const sql = getSql();
 
-  await sql`
+  const inserted = (await sql`
     INSERT INTO public.investigations (
       id,
+      user_id,
       title,
       error_message,
       code_snippet,
@@ -338,6 +377,7 @@ export async function saveInvestigation(
     )
     VALUES (
       ${saved.id}::uuid,
+      ${saved.userId},
       ${saved.title},
       ${saved.errorMessage},
       ${saved.codeSnippet ?? null},
@@ -363,7 +403,13 @@ export async function saveInvestigation(
       status = EXCLUDED.status,
       updated_at = EXCLUDED.updated_at,
       user_feedback = EXCLUDED.user_feedback
-  `;
+    WHERE public.investigations.user_id = EXCLUDED.user_id
+    RETURNING id
+  `) as { id: string }[];
+
+  if (inserted.length === 0) {
+    throw new Error('Investigation ownership conflict');
+  }
 
   if (saved.report) {
     const report = saved.report;
@@ -423,7 +469,7 @@ export async function saveInvestigation(
     `;
   }
 
-  const result = await getInvestigationById(saved.id);
+  const result = await getInvestigationById(saved.id, saved.userId);
 
   if (!result) {
     throw new Error(
@@ -434,8 +480,12 @@ export async function saveInvestigation(
   return result;
 }
 
+/**
+ * Updates feedback only for an investigation owned by the specified user.
+ */
 export async function updateInvestigationFeedback(
   id: string,
+  userId: string,
   helpful: boolean,
   comment?: string
 ): Promise<Investigation | null> {
@@ -449,7 +499,9 @@ export async function updateInvestigationFeedback(
     const db = initLocalDb();
     const existing = db.investigations[id];
 
-    if (!existing) return null;
+    if (!existing || existing.userId !== userId) {
+      return null;
+    }
 
     const updated: Investigation = {
       ...existing,
@@ -471,21 +523,29 @@ export async function updateInvestigationFeedback(
       user_feedback = ${JSON.stringify(feedback)}::jsonb,
       updated_at = ${feedback.feedbackAt}
     WHERE id = ${id}::uuid
+      AND user_id = ${userId}
     RETURNING id
   `) as { id: string }[];
 
   if (rows.length === 0) return null;
 
-  return getInvestigationById(id);
+  return getInvestigationById(id, userId);
 }
 
+/**
+ * Deletes only an investigation belonging to the specified user.
+ */
 export async function deleteInvestigation(
-  id: string
+  id: string,
+  userId: string
 ): Promise<boolean> {
   if (!isNeonConfigured()) {
     const db = initLocalDb();
+    const existing = db.investigations[id];
 
-    if (!db.investigations[id]) return false;
+    if (!existing || existing.userId !== userId) {
+      return false;
+    }
 
     delete db.investigations[id];
     saveLocalDb(db);
@@ -498,15 +558,29 @@ export async function deleteInvestigation(
   const rows = (await sql`
     DELETE FROM public.investigations
     WHERE id = ${id}::uuid
+      AND user_id = ${userId}
     RETURNING id
   `) as { id: string }[];
 
   return rows.length > 0;
 }
 
-export async function clearAllInvestigations(): Promise<void> {
+/**
+ * Clears only the specified user's investigations.
+ */
+export async function clearAllInvestigations(
+  userId: string
+): Promise<void> {
   if (!isNeonConfigured()) {
-    saveLocalDb({ investigations: {} });
+    const db = initLocalDb();
+
+    const remaining = Object.fromEntries(
+      Object.entries(db.investigations).filter(
+        ([, investigation]) => investigation.userId !== userId
+      )
+    );
+
+    saveLocalDb({ investigations: remaining });
     return;
   }
 
@@ -514,5 +588,6 @@ export async function clearAllInvestigations(): Promise<void> {
 
   await sql`
     DELETE FROM public.investigations
+    WHERE user_id = ${userId}
   `;
 }

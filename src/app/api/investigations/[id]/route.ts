@@ -1,5 +1,7 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getInvestigationById, deleteInvestigation } from '@/lib/db';
+import { requireUserId } from '@/lib/auth';
 import { blockUnauthenticatedProductionApi } from '@/lib/security/public-launch-guard';
 
 export const dynamic = 'force-dynamic';
@@ -11,8 +13,15 @@ export async function GET(
   const blocked = blockUnauthenticatedProductionApi();
   if (blocked) return blocked;
 
+  const authResult = await requireUserId();
+  if (authResult.response) return authResult.response;
+
   try {
-    const investigation = await getInvestigationById(params.id);
+    const investigation = await getInvestigationById(
+      params.id,
+      authResult.userId
+    );
+
     if (!investigation) {
       return NextResponse.json(
         { success: false, error: 'Investigation not found' },
@@ -20,11 +29,12 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: investigation,
-    });
+    return NextResponse.json(
+      { success: true, data: investigation },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   } catch (error: any) {
+    console.error('Failed to fetch investigation:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch investigation' },
       { status: 500 }
@@ -39,8 +49,15 @@ export async function DELETE(
   const blocked = blockUnauthenticatedProductionApi();
   if (blocked) return blocked;
 
+  const authResult = await requireUserId();
+  if (authResult.response) return authResult.response;
+
   try {
-    const deleted = await deleteInvestigation(params.id);
+    const deleted = await deleteInvestigation(
+      params.id,
+      authResult.userId
+    );
+
     if (!deleted) {
       return NextResponse.json(
         { success: false, error: 'Investigation not found' },
@@ -53,10 +70,10 @@ export async function DELETE(
       message: 'Investigation deleted successfully',
     });
   } catch (error: any) {
+    console.error('Failed to delete investigation:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to delete investigation' },
       { status: 500 }
     );
   }
 }
-

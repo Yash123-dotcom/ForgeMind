@@ -16,6 +16,9 @@ import {
   keepGroundedAiEvidence,
 } from "../diagnostic-engine/evidence";
 
+const MAX_AI_RESPONSE_BYTES = 1024 * 1024;
+const MAX_AI_CONTENT_LENGTH = 256 * 1024;
+
 export interface AiProviderConfig {
   apiKey?: string;
   baseUrl: string;
@@ -50,6 +53,74 @@ export interface PromptPayload {
   deterministicResult: DeterministicAnalysisResult;
 }
 
+/**
+ * Reads an upstream response without allowing its body to exceed
+ * MAX_AI_RESPONSE_BYTES. The actual stream size is checked even when
+ * Content-Length is missing or inaccurate.
+ */
+async function readLimitedResponseText(
+  response: Response
+): Promise<string> {
+  const contentLength = response.headers.get("content-length");
+
+  if (contentLength !== null) {
+    const declaredSize = Number(contentLength);
+
+    if (
+      !Number.isSafeInteger(declaredSize) ||
+      declaredSize < 0
+    ) {
+      throw new Error("AI provider returned an invalid response size.");
+    }
+
+    if (declaredSize > MAX_AI_RESPONSE_BYTES) {
+      await response.body?.cancel();
+      throw new Error("AI provider response exceeded the size limit.");
+    }
+  }
+
+  if (!response.body) {
+    throw new Error("AI provider returned an empty response body.");
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalSize = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) break;
+
+      totalSize += value.byteLength;
+
+      if (totalSize > MAX_AI_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new Error("AI provider response exceeded the size limit.");
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalSize);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error("AI provider returned invalid response encoding.");
+  }
+}
+
 const SYSTEM_PROMPT = `You are ForgeMind Intelligence, an expert Unity game engine diagnostic analyst.
 
 Your task is to diagnose Unity C# compiler errors, runtime exceptions, shader errors, package problems, and configuration issues using only the supplied evidence.
@@ -76,9 +147,7 @@ export async function requestAiDiagnosis(
   const config = getAiConfig();
 
   if (!config.apiKey) {
-    throw new Error(
-      "AI Provider is not configured. Set AI_API_KEY (or OPENAI_API_KEY) in .env.local to enable AI-powered analysis.",
-    );
+    throw new Error("AI provider is not configured.");
   }
 
   const filesSummary = (payload.attachedFiles ?? [])
@@ -169,27 +238,59 @@ Return raw JSON only.`;
       signal: controller.signal,
     });
 
+    // Read and bound both successful and unsuccessful provider responses.
+    const responseText = await readLimitedResponseText(response);
+
     if (!response.ok) {
-      const errorText = await response.text();
-      let message = `AI provider responded with HTTP ${response.status}`;
-
-      try {
-        const parsed = JSON.parse(errorText);
-        if (parsed.error?.message) {
-          message = `${message}: ${parsed.error.message}`;
-        }
-      } catch {
-        message = `${message}: ${errorText.slice(0, 200)}`;
-      }
-
-      throw new Error(message);
+      // Do not expose or persist provider response details.
+      throw new Error(
+        `AI provider returned HTTP ${response.status}.`
+      );
     }
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    let data: unknown;
 
-    if (typeof content !== "string" || !content.trim()) {
-      throw new Error("AI provider returned empty response content.");
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      throw new Error("AI provider returned invalid JSON.");
+    }
+
+    if (!data || typeof data !== "object") {
+      throw new Error("AI provider returned an invalid response.");
+    }
+
+    const choices = (data as { choices?: unknown }).choices;
+
+    if (!Array.isArray(choices) || choices.length === 0) {
+      throw new Error("AI provider returned no diagnosis.");
+    }
+
+    const firstChoice = choices[0];
+
+    if (!firstChoice || typeof firstChoice !== "object") {
+      throw new Error("AI provider returned an invalid diagnosis.");
+    }
+
+    const message = (
+      firstChoice as { message?: unknown }
+    ).message;
+
+    if (!message || typeof message !== "object") {
+      throw new Error("AI provider returned an invalid diagnosis.");
+    }
+
+    const content = (
+      message as { content?: unknown }
+    ).content;
+
+    if (
+      typeof content !== "string" ||
+      !content.trim() ||
+      new TextEncoder().encode(content).byteLength >
+        MAX_AI_CONTENT_LENGTH
+    ) {
+      throw new Error("AI provider returned invalid or oversized content.");
     }
 
     let parsedJson: unknown;
@@ -231,8 +332,6 @@ Return raw JSON only.`;
       validated.confidence.level,
     );
 
-    clearTimeout(timeoutId);
-
     return {
       report: {
         executiveSummary: validated.executiveSummary,
@@ -252,16 +351,16 @@ Return raw JSON only.`;
       },
     };
   } catch (error: unknown) {
-    clearTimeout(timeoutId);
-
     if (
       error instanceof Error &&
       error.name === "AbortError"
     ) {
-      throw new Error("AI Provider request timed out after 45 seconds.");
+      throw new Error("AI provider request timed out.");
     }
 
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

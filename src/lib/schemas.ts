@@ -142,30 +142,30 @@ export const DiagnosticEvidenceItemSchema = z.object({
     'manifest_entry',
     'configuration',
   ]),
-  content: z.string(),
-  location: z.string().optional(),
-  significance: z.string(),
+  content: z.string().max(3000),
+  location: z.string().max(500).optional(),
+  significance: z.string().max(1000),
 });
 
 export const SuggestedCodeChangeSchema = z.object({
-  fileName: z.string().optional(),
-  originalSnippet: z.string().optional(),
-  proposedSnippet: z.string(),
-  explanation: z.string(),
+  fileName: z.string().max(255).optional(),
+  originalSnippet: z.string().max(10000).optional(),
+  proposedSnippet: z.string().max(10000),
+  explanation: z.string().max(2000),
   diffType: z
     .enum(['patch', 'replacement', 'addition'])
     .optional(),
 });
 
 export const VerificationStepSchema = z.object({
-  id: z.string(),
-  instruction: z.string(),
-  expectedOutcome: z.string(),
+  id: z.string().max(100),
+  instruction: z.string().max(2000),
+  expectedOutcome: z.string().max(2000),
 });
 
 export const AiDiagnosticResponseSchema = z.object({
-  executiveSummary: z.string().min(10),
-  likelyRootCause: z.string().min(10),
+  executiveSummary: z.string().min(10).max(2000),
+  likelyRootCause: z.string().min(10).max(4000),
 
   severity: z.enum([
     'info',
@@ -177,20 +177,34 @@ export const AiDiagnosticResponseSchema = z.object({
 
   confidence: z.object({
     level: z.enum(['high', 'medium', 'low']),
-    calibrationReasoning: z.string().min(10),
+    calibrationReasoning: z.string().min(10).max(1000),
   }),
 
-  evidence: z.array(DiagnosticEvidenceItemSchema),
+  evidence: z
+    .array(DiagnosticEvidenceItemSchema)
+    .max(30),
 
-  recommendedFix: z.array(z.string()).min(1),
+  recommendedFix: z
+    .array(z.string().min(1).max(2000))
+    .min(1)
+    .max(15),
 
-  suggestedCodeChanges: z.array(SuggestedCodeChangeSchema),
+  suggestedCodeChanges: z
+    .array(SuggestedCodeChangeSchema)
+    .max(10),
 
-  verificationSteps: z.array(VerificationStepSchema).min(1),
+  verificationSteps: z
+    .array(VerificationStepSchema)
+    .min(1)
+    .max(10),
 
-  alternativeCauses: z.array(z.string()),
+  alternativeCauses: z
+    .array(z.string().min(1).max(2000))
+    .max(10),
 
-  missingInformation: z.array(z.string()),
+  missingInformation: z
+    .array(z.string().min(1).max(2000))
+    .max(10),
 });
 
 export const UserFeedbackSchema = z.object({
