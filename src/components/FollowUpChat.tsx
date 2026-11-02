@@ -11,8 +11,10 @@ import {
 } from 'lucide-react';
 
 type ChatMessage = {
+  id: string;
   role: 'user' | 'assistant';
   content: string;
+  createdAt: string;
 };
 
 type FollowUpChatProps = {
@@ -51,55 +53,178 @@ type SpeechRecognitionLike = {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
+type HistoryResponse = {
+  success?: boolean;
+  messages?: ChatMessage[];
+  error?: string;
+};
+
+type SendResponse = {
+  success?: boolean;
+  reply?: string;
+  messages?: ChatMessage[];
+  error?: string;
+};
+
+function isChatMessage(value: unknown): value is ChatMessage {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const message = value as Record<string, unknown>;
+
+  return (
+    typeof message.id === 'string' &&
+    (message.role === 'user' || message.role === 'assistant') &&
+    typeof message.content === 'string' &&
+    typeof message.createdAt === 'string'
+  );
+}
+
 export default function FollowUpChat({
   investigationId,
 }: FollowUpChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const speakingRef = useRef(false);
+  const activeInvestigationIdRef = useRef(investigationId);
+  const sendAbortControllerRef = useRef<AbortController | null>(null);
+  const loadHistoryRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, sending]);
 
+  // Keep activeInvestigationIdRef updated synchronously.
+  useEffect(() => {
+    activeInvestigationIdRef.current = investigationId;
+  }, [investigationId]);
+
+  // Load persisted conversation whenever the investigation changes.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    // Cancel in-flight message sends and speech playback if investigation changes.
+    if (sendAbortControllerRef.current) {
+      sendAbortControllerRef.current.abort();
+      sendAbortControllerRef.current = null;
+    }
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeakingMessageId(null);
+
+    async function loadHistory() {
+      setLoadingHistory(true);
+      setMessages([]);
+      setHistoryError(null);
+      setVoiceError('');
+
+      try {
+        const response = await fetch(
+          `/api/investigations/${encodeURIComponent(
+            investigationId,
+          )}/follow-up`,
+          {
+            method: 'GET',
+            cache: 'no-store',
+            signal: controller.signal,
+          },
+        );
+
+        const data: HistoryResponse = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.error || 'Unable to load conversation history.',
+          );
+        }
+
+        if (!Array.isArray(data.messages)) {
+          throw new Error('Invalid conversation history response.');
+        }
+
+        if (!data.messages.every(isChatMessage)) {
+          throw new Error('Conversation history contains invalid messages.');
+        }
+
+        // Only commit messages if this response matches the current active investigation.
+        if (activeInvestigationIdRef.current === investigationId) {
+          setMessages(data.messages);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+
+        if (activeInvestigationIdRef.current === investigationId) {
+          setHistoryError(
+            error instanceof Error
+              ? error.message
+              : 'Unable to load conversation history.',
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted && activeInvestigationIdRef.current === investigationId) {
+          setLoadingHistory(false);
+        }
+      }
+    }
+
+    loadHistoryRef.current = () => {
+      void loadHistory();
+    };
+
+    void loadHistory();
+
+    return () => {
+      controller.abort();
+    };
+  }, [investigationId]);
+
+  // Clean up voice features and pending requests on unmount.
   useEffect(() => {
     return () => {
       recognitionRef.current?.abort?.();
       recognitionRef.current = null;
 
-      if ('speechSynthesis' in window) {
+      if (sendAbortControllerRef.current) {
+        sendAbortControllerRef.current.abort();
+        sendAbortControllerRef.current = null;
+      }
+
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
     };
   }, []);
 
   const sendMessage = async () => {
+    const targetInvestigationId = investigationId;
     const message = input.trim();
 
-    if (!message || sending) return;
+    if (!message || sending || loadingHistory) return;
 
-    const previousMessages = messages;
-    const nextMessages: ChatMessage[] = [
-      ...previousMessages,
-      { role: 'user', content: message },
-    ];
+    const controller = new AbortController();
+    sendAbortControllerRef.current = controller;
 
-    setMessages(nextMessages);
-    setInput('');
     setSending(true);
+    setInput('');
     setVoiceError('');
 
     try {
       const response = await fetch(
         `/api/investigations/${encodeURIComponent(
-          investigationId,
+          targetInvestigationId,
         )}/follow-up`,
         {
           method: 'POST',
@@ -108,16 +233,12 @@ export default function FollowUpChat({
           },
           body: JSON.stringify({
             message,
-            history: previousMessages.slice(-10),
           }),
+          signal: controller.signal,
         },
       );
 
-      const data: {
-        success?: boolean;
-        reply?: string;
-        error?: string;
-      } = await response.json();
+      const data: SendResponse = await response.json();
 
       if (
         !response.ok ||
@@ -129,19 +250,67 @@ export default function FollowUpChat({
         );
       }
 
-      setMessages([
-        ...nextMessages,
-        { role: 'assistant', content: data.reply },
-      ]);
+      // Drop stale response if the user navigated to another investigation.
+      if (activeInvestigationIdRef.current !== targetInvestigationId) {
+        return;
+      }
+
+      // Prefer the canonical records returned by the server.
+      if (
+        Array.isArray(data.messages) &&
+        data.messages.length === 2 &&
+        data.messages.every(isChatMessage)
+      ) {
+        setMessages((previous) => [
+          ...previous,
+          ...data.messages!,
+        ]);
+      } else {
+        // Compatibility fallback if the API response omits message records.
+        const now = new Date();
+
+        setMessages((previous) => [
+          ...previous,
+          {
+            id: `local-user-${now.getTime()}`,
+            role: 'user',
+            content: message,
+            createdAt: now.toISOString(),
+          },
+          {
+            id: `local-assistant-${now.getTime()}`,
+            role: 'assistant',
+            content: data.reply!,
+            createdAt: new Date(now.getTime() + 1).toISOString(),
+          },
+        ]);
+      }
     } catch (error) {
-      setMessages(nextMessages);
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
+
+      // If user switched investigations, do not alter current input or error state.
+      if (activeInvestigationIdRef.current !== targetInvestigationId) {
+        return;
+      }
+
+      // Restore the draft so the user can retry.
+      setInput(message);
+
       setVoiceError(
         error instanceof Error
           ? error.message
           : 'Something went wrong. Please try again.',
       );
     } finally {
-      setSending(false);
+      if (sendAbortControllerRef.current === controller) {
+        sendAbortControllerRef.current = null;
+      }
+
+      if (activeInvestigationIdRef.current === targetInvestigationId) {
+        setSending(false);
+      }
     }
   };
 
@@ -178,7 +347,9 @@ export default function FollowUpChat({
     try {
       recognition = new SpeechRecognitionAPI();
     } catch {
-      setVoiceError('Could not initialize voice input. Please try again.');
+      setVoiceError(
+        'Could not initialize voice input. Please try again.',
+      );
       return;
     }
 
@@ -227,21 +398,25 @@ export default function FollowUpChat({
     }
   };
 
-  const toggleSpeech = (content: string) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+  const toggleSpeech = (messageId: string, content: string) => {
+    if (
+      typeof window === 'undefined' ||
+      !('speechSynthesis' in window)
+    ) {
       setVoiceError(
         'Speech playback is not supported in this browser.',
       );
       return;
     }
 
-    if (speakingRef.current) {
+    // If currently playing this specific message, stop it.
+    if (speakingMessageId === messageId) {
       window.speechSynthesis.cancel();
-      speakingRef.current = false;
-      setSpeaking(false);
+      setSpeakingMessageId(null);
       return;
     }
 
+    // Cancel any previous message utterance and start the selected one.
     window.speechSynthesis.cancel();
     setVoiceError('');
 
@@ -249,18 +424,15 @@ export default function FollowUpChat({
     utterance.lang = 'en-US';
 
     utterance.onstart = () => {
-      speakingRef.current = true;
-      setSpeaking(true);
+      setSpeakingMessageId(messageId);
     };
 
     utterance.onend = () => {
-      speakingRef.current = false;
-      setSpeaking(false);
+      setSpeakingMessageId((current) => (current === messageId ? null : current));
     };
 
     utterance.onerror = () => {
-      speakingRef.current = false;
-      setSpeaking(false);
+      setSpeakingMessageId((current) => (current === messageId ? null : current));
     };
 
     window.speechSynthesis.speak(utterance);
@@ -284,8 +456,33 @@ export default function FollowUpChat({
         </div>
       </div>
 
-      <div className="max-h-96 space-y-3 overflow-y-auto p-4">
-        {messages.length === 0 && (
+      <div
+        className="max-h-96 space-y-3 overflow-y-auto p-4"
+        aria-live="polite"
+      >
+        {loadingHistory && (
+          <p
+            className="text-xs text-foreground-muted"
+            role="status"
+          >
+            Loading conversation…
+          </p>
+        )}
+
+        {historyError && !loadingHistory && (
+          <div className="rounded-md border border-[#ef7770]/30 bg-[#ef7770]/5 p-3">
+            <p className="text-xs text-[#ef7770]">{historyError}</p>
+            <button
+              type="button"
+              onClick={() => loadHistoryRef.current?.()}
+              className="mt-2 inline-flex items-center rounded border border-border px-2.5 py-1 text-xs font-medium text-foreground hover:bg-surface-elevated"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!loadingHistory && !historyError && messages.length === 0 && !voiceError && (
           <div className="rounded-md border border-border bg-background p-4">
             <p className="text-sm text-foreground">
               What happened when you tried the recommended fix?
@@ -296,46 +493,49 @@ export default function FollowUpChat({
           </div>
         )}
 
-        {messages.map((message, index) => (
-          <article
-            key={`${message.role}-${index}`}
-            className={`rounded-lg border p-3 ${
-              message.role === 'user'
-                ? 'ml-5 border-brand/20 bg-brand/5'
-                : 'mr-3 border-border bg-background'
-            }`}
-          >
-            <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-foreground-muted">
-              {message.role === 'user' ? 'You' : 'ForgeMind'}
-            </p>
+        {messages.map((message) => {
+          const isThisMessageSpeaking = speakingMessageId === message.id;
 
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
-              {message.content}
-            </p>
+          return (
+            <article
+              key={message.id}
+              className={`rounded-lg border p-3 ${
+                message.role === 'user'
+                  ? 'ml-5 border-brand/20 bg-brand/5'
+                  : 'mr-3 border-border bg-background'
+              }`}
+            >
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-foreground-muted">
+                {message.role === 'user' ? 'You' : 'ForgeMind'}
+              </p>
 
-            {message.role === 'assistant' && (
-              <button
-                type="button"
-                onClick={() => toggleSpeech(message.content)}
-                className="mt-2 inline-flex items-center gap-1.5 text-xs text-foreground-secondary hover:text-brand"
-                aria-label={speaking ? 'Stop speech' : 'Listen to response'}
-              >
-                {speaking ? (
-                  <VolumeX className="h-3.5 w-3.5" />
-                ) : (
-                  <Volume2 className="h-3.5 w-3.5" />
-                )}
-                {speaking ? 'Stop speech' : 'Listen'}
-              </button>
-            )}
-          </article>
-        ))}
+              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+                {message.content}
+              </p>
+
+              {message.role === 'assistant' && (
+                <button
+                  type="button"
+                  onClick={() => toggleSpeech(message.id, message.content)}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs text-foreground-secondary hover:text-brand"
+                  aria-label={isThisMessageSpeaking ? 'Stop speech' : 'Listen to response'}
+                >
+                  {isThisMessageSpeaking ? (
+                    <VolumeX className="h-3.5 w-3.5 text-brand" />
+                  ) : (
+                    <Volume2 className="h-3.5 w-3.5" />
+                  )}
+                  {isThisMessageSpeaking ? 'Stop speech' : 'Listen'}
+                </button>
+              )}
+            </article>
+          );
+        })}
 
         {sending && (
           <p
             className="text-xs text-foreground-muted"
             role="status"
-            aria-live="polite"
           >
             ForgeMind is thinking…
           </p>
@@ -358,7 +558,7 @@ export default function FollowUpChat({
             placeholder="Tell ForgeMind what happened…"
             rows={2}
             maxLength={3000}
-            disabled={sending}
+            disabled={sending || loadingHistory}
             className="min-w-0 flex-1 resize-y rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus:border-brand focus:outline-none disabled:opacity-60"
           />
 
@@ -366,7 +566,7 @@ export default function FollowUpChat({
             <button
               type="button"
               onClick={startVoiceInput}
-              disabled={listening || sending}
+              disabled={listening || sending || loadingHistory}
               aria-label="Dictate message"
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border px-3 text-xs text-foreground hover:bg-surface-elevated disabled:opacity-50"
             >
@@ -376,7 +576,7 @@ export default function FollowUpChat({
 
             <button
               type="submit"
-              disabled={sending || !input.trim()}
+              disabled={sending || loadingHistory || !input.trim()}
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-brand px-3 text-xs font-semibold text-background hover:bg-brand-light disabled:opacity-40"
             >
               <Send className="h-3.5 w-3.5" />
@@ -402,4 +602,3 @@ export default function FollowUpChat({
     </section>
   );
 }
-  

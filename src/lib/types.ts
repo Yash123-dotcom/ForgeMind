@@ -119,3 +119,12 @@ export interface InvestigationCreateInput {
   targetPlatform?: TargetPlatform;
   attachedFiles?: UploadedFileContext[];
 }
+
+export interface FollowUpMessage {
+  id: string;
+  investigationId: string;
+  userId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}

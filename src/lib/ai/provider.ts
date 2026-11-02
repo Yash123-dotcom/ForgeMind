@@ -1,5 +1,6 @@
 
 import { AiDiagnosticResponseSchema } from "../schemas";
+
 import type {
   DiagnosticEvidenceItem,
   DiagnosticReport,
@@ -9,7 +10,9 @@ import type {
   UploadedFileContext,
   VerificationStep,
 } from "../types";
+
 import { DeterministicAnalysisResult } from "../diagnostic-engine";
+
 import {
   calibrateDiagnosisConfidence,
   collectDirectEvidence,
@@ -58,7 +61,7 @@ export interface PromptPayload {
  * MAX_AI_RESPONSE_BYTES. The actual stream size is checked even when
  * Content-Length is missing or inaccurate.
  */
-async function readLimitedResponseText(
+export async function readLimitedResponseText(
   response: Response
 ): Promise<string> {
   const contentLength = response.headers.get("content-length");
@@ -194,6 +197,7 @@ DETERMINISTIC RULE FINDINGS:
 ${deterministicSummary}
 
 Return a JSON object with these fields:
+
 - executiveSummary: concise description of the observed failure
 - likelyRootCause: the most likely explanation supported by the evidence; state uncertainty where needed
 - severity: 'info' | 'low' | 'medium' | 'high' | 'critical'

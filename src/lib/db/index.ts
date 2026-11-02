@@ -1,13 +1,19 @@
+
 import fs from 'fs';
 import path from 'path';
 import { neon } from '@neondatabase/serverless';
-import type { Investigation, DiagnosticReport } from '../types';
+import type {
+  Investigation,
+  DiagnosticReport,
+  FollowUpMessage,
+} from '../types';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'forgemind.json');
 
 interface DatabaseShape {
   investigations: Record<string, Investigation>;
+  followUpMessages: Record<string, FollowUpMessage[]>;
 }
 
 interface DbRow {
@@ -57,38 +63,58 @@ function toIsoString(value: string | Date | null | undefined): string {
     : date.toISOString();
 }
 
+/**
+ * Reads the local JSON database.
+ * Supports older files that do not contain followUpMessages.
+ */
 function initLocalDb(): DatabaseShape {
+  const emptyDb: DatabaseShape = {
+    investigations: {},
+    followUpMessages: {},
+  };
+
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
 
     if (!fs.existsSync(DATA_FILE)) {
-      const initial: DatabaseShape = { investigations: {} };
-
       fs.writeFileSync(
         DATA_FILE,
-        JSON.stringify(initial, null, 2),
+        JSON.stringify(emptyDb, null, 2),
         'utf8'
       );
 
-      return initial;
+      return emptyDb;
     }
 
     const raw = fs.readFileSync(DATA_FILE, 'utf8');
-    const parsed = JSON.parse(raw) as DatabaseShape;
+    const parsed: unknown = JSON.parse(raw);
 
-    if (!parsed || !isRecord(parsed.investigations)) {
-      return { investigations: {} };
+    if (
+      !isRecord(parsed) ||
+      !isRecord(parsed.investigations)
+    ) {
+      return emptyDb;
     }
 
-    return parsed;
+    return {
+      investigations:
+        parsed.investigations as Record<string, Investigation>,
+
+      followUpMessages: isRecord(parsed.followUpMessages)
+        ? parsed.followUpMessages as Record<string, FollowUpMessage[]>
+        : {},
+    };
   } catch (error) {
     console.error('Failed to read local database:', error);
-    return { investigations: {} };
+    return emptyDb;
   }
 }
 
+/**
+ * Writes the local JSON database atomically.
+ */
 function saveLocalDb(data: DatabaseShape): void {
   try {
     if (!fs.existsSync(DATA_DIR)) {
@@ -147,7 +173,9 @@ function mapReport(value: unknown): DiagnosticReport | undefined {
     ),
     executiveSummary: String(parsed.executive_summary ?? ''),
     likelyRootCause: String(parsed.likely_root_cause ?? ''),
-    severity: String(parsed.severity ?? 'medium') as DiagnosticReport['severity'],
+    severity: String(
+      parsed.severity ?? 'medium'
+    ) as DiagnosticReport['severity'],
     confidence: (
       parseJson(parsed.confidence) ?? {
         level: 'medium',
@@ -322,6 +350,175 @@ export async function getInvestigationById(
   `) as DbRow[];
 
   return rows.length > 0 ? mapInvestigation(rows[0]) : null;
+}
+
+/**
+ * Returns messages only when the investigation belongs to the user.
+ * Returns the latest messages in chronological order.
+ */
+export async function getFollowUpMessages(
+  investigationId: string,
+  userId: string,
+  limit = 50
+): Promise<FollowUpMessage[]> {
+  const safeLimit = Math.max(1, Math.min(limit, 100));
+
+  if (!isNeonConfigured()) {
+    const db = initLocalDb();
+    const investigation = db.investigations[investigationId];
+
+    if (!investigation || investigation.userId !== userId) {
+      return [];
+    }
+
+    return (db.followUpMessages[investigationId] ?? [])
+      .filter((message) => message.userId === userId)
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() -
+          new Date(b.createdAt).getTime()
+      )
+      .slice(-safeLimit);
+  }
+
+  const sql = getSql();
+
+  const rows = (await sql`
+    SELECT
+      recent.id,
+      recent.investigation_id,
+      recent.user_id,
+      recent.role,
+      recent.content,
+      recent.created_at
+    FROM (
+      SELECT
+        fm.id,
+        fm.investigation_id,
+        fm.user_id,
+        fm.role,
+        fm.content,
+        fm.created_at
+      FROM public.follow_up_messages AS fm
+      INNER JOIN public.investigations AS i
+        ON i.id = fm.investigation_id
+      WHERE fm.investigation_id = ${investigationId}::uuid
+        AND fm.user_id = ${userId}
+        AND i.user_id = ${userId}
+      ORDER BY fm.created_at DESC, fm.id DESC
+      LIMIT ${safeLimit}
+    ) AS recent
+    ORDER BY recent.created_at ASC, recent.id ASC
+  `) as {
+    id: string;
+    investigation_id: string;
+    user_id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    created_at: string | Date;
+  }[];
+
+  return rows.map((row) => ({
+    id: String(row.id),
+    investigationId: String(row.investigation_id),
+    userId: row.user_id,
+    role: row.role,
+    content: row.content,
+    createdAt: toIsoString(row.created_at),
+  }));
+}
+
+/**
+ * Saves messages only for an investigation owned by the specified user.
+ * A batch is inserted in one SQL statement in Neon.
+ */
+export async function saveFollowUpMessages(
+  investigationId: string,
+  userId: string,
+  messages: FollowUpMessage[]
+): Promise<void> {
+  if (!messages.length) return;
+
+  if (
+    messages.length > 20 ||
+    messages.some(
+      (message) =>
+        message.investigationId !== investigationId ||
+        message.userId !== userId ||
+        !message.id ||
+        !['user', 'assistant'].includes(message.role) ||
+        typeof message.content !== 'string' ||
+        message.content.trim().length < 1 ||
+        message.content.length > 3000
+    )
+  ) {
+    throw new Error('Invalid follow-up messages');
+  }
+
+  if (!isNeonConfigured()) {
+    const db = initLocalDb();
+    const investigation = db.investigations[investigationId];
+
+    if (!investigation || investigation.userId !== userId) {
+      throw new Error('Investigation not found or access denied');
+    }
+
+    const existing = db.followUpMessages[investigationId] ?? [];
+
+    db.followUpMessages[investigationId] = [
+      ...existing,
+      ...messages,
+    ].slice(-100);
+
+    saveLocalDb(db);
+    return;
+  }
+
+  const sql = getSql();
+
+  const records = messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    created_at: message.createdAt,
+  }));
+
+  const inserted = (await sql`
+    INSERT INTO public.follow_up_messages (
+      id,
+      investigation_id,
+      user_id,
+      role,
+      content,
+      created_at
+    )
+    SELECT
+      message.id,
+      ${investigationId}::uuid,
+      ${userId},
+      message.role,
+      message.content,
+      message.created_at
+    FROM jsonb_to_recordset(
+      ${JSON.stringify(records)}::jsonb
+    ) AS message(
+      id uuid,
+      role text,
+      content text,
+      created_at timestamptz
+    )
+    WHERE EXISTS (
+      SELECT 1
+      FROM public.investigations
+      WHERE id = ${investigationId}::uuid
+        AND user_id = ${userId}
+    )
+    RETURNING id
+  `) as { id: string }[];
+
+  if (inserted.length !== messages.length) {
+    throw new Error('Unable to save follow-up messages');
+  }
 }
 
 /**
@@ -548,6 +745,8 @@ export async function deleteInvestigation(
     }
 
     delete db.investigations[id];
+    delete db.followUpMessages[id];
+
     saveLocalDb(db);
 
     return true;
@@ -567,6 +766,7 @@ export async function deleteInvestigation(
 
 /**
  * Clears only the specified user's investigations.
+ * Preserves other users' investigations and associated local messages.
  */
 export async function clearAllInvestigations(
   userId: string
@@ -580,7 +780,22 @@ export async function clearAllInvestigations(
       )
     );
 
-    saveLocalDb({ investigations: remaining });
+    const remainingInvestigationIds = new Set(
+      Object.keys(remaining)
+    );
+
+    const remainingMessages = Object.fromEntries(
+      Object.entries(db.followUpMessages).filter(
+        ([investigationId]) =>
+          remainingInvestigationIds.has(investigationId)
+      )
+    );
+
+    saveLocalDb({
+      investigations: remaining,
+      followUpMessages: remainingMessages,
+    });
+
     return;
   }
 
