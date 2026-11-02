@@ -25,7 +25,7 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const blocked = blockUnauthenticatedProductionApi();
+  const blocked = await blockUnauthenticatedProductionApi();
   if (blocked) return blocked;
 
   const authResult = await requireUserId();
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const blocked = blockUnauthenticatedProductionApi();
+  const blocked = await blockUnauthenticatedProductionApi();
   if (blocked) return blocked;
 
   const authResult = await requireUserId();

@@ -26,7 +26,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const blocked = blockUnauthenticatedProductionApi();
+  const blocked = await blockUnauthenticatedProductionApi();
   if (blocked) return blocked;
 
   const authResult = await requireUserId();
